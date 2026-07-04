@@ -8,14 +8,39 @@ import { ghost } from "./ui/styles";
    tope 15 por vuelo. En la app real, limite y premio viven en el BACKEND. */
 const GW = 380, GH = 470, BX = 92, BR = 13, PW = 60, GAP = 76;
 
-export function Game({ onBack, tries, onPrize, play }) {
+export function Game({ onBack, tries, onPrize, play, fichaStart, fichaEnd, onError }) {
   const canvasRef = useRef(null);
   const gRef = useRef(null);
   const phaseRef = useRef("ready");
+  const flightIdRef = useRef(null); // token del vuelo emitido por el server
+  const busyRef = useRef(false);
   const [phase, setPhase] = useState("ready"); // ready | playing | over
   const [score, setScore] = useState(0);
   const [prize, setPrize] = useState(0);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  /* el vuelo arranca y termina en el SERVER: el cliente nunca acredita */
+  const startRun = async () => {
+    if (busyRef.current || tries <= 0) return;
+    busyRef.current = true;
+    const r = await fichaStart();
+    busyRef.current = false;
+    if (!r.ok) return onError(r.error);
+    flightIdRef.current = r.flightId;
+    setScore(0);
+    setPhase("playing");
+  };
+
+  const reportRun = async (finalScore) => {
+    const r = await fichaEnd(flightIdRef.current, Math.min(finalScore, 15));
+    if (r.ok) {
+      setPrize(r.prize);
+      onPrize(r.prize);
+    } else {
+      setPrize(0);
+      onError(r.error);
+    }
+  };
 
   const drawScene = (ctx, g) => {
     ctx.clearRect(0, 0, GW, GH);
@@ -104,10 +129,9 @@ export function Game({ onBack, tries, onPrize, play }) {
 
       if (dead) {
         play("crash");
-        const won = Math.min(g.score, 15); // 1 pt por caño, tope 15
-        setPrize(won);
+        setPrize(Math.min(g.score, 15)); // optimista; el server confirma (o rechaza)
         setPhase("over");
-        onPrize(won);
+        reportRun(g.score);
         return;
       }
       raf = requestAnimationFrame(loop);
@@ -117,10 +141,10 @@ export function Game({ onBack, tries, onPrize, play }) {
   }, [phase]);
 
   const tap = () => {
-    if (phaseRef.current === "ready" && tries > 0) { setScore(0); setPhase("playing"); return; }
+    if (phaseRef.current === "ready" && tries > 0) { startRun(); return; }
     if (phaseRef.current === "playing" && gRef.current) { gRef.current.v = -7.3; play("flap"); }
   };
-  const again = () => { if (tries > 0) { setScore(0); setPhase("playing"); } };
+  const again = () => { startRun(); };
 
   return (
     <div style={{ paddingTop: 12 }}>
@@ -186,7 +210,7 @@ export function Game({ onBack, tries, onPrize, play }) {
       )}
 
       <p style={{ color: C.faint, fontSize: 11, marginTop: 4, lineHeight: 1.5, textAlign: "center" }}>
-        3 vuelos por día. En el prototipo se reinician al recargar; en la app real el límite y el premio viven en el backend.
+        3 vuelos por día. El límite y el premio los controla el server: mañana se renuevan.
       </p>
     </div>
   );

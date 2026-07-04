@@ -132,8 +132,18 @@ HECHO:
   conservar el momento jackpot; (d) handle inmutable (el prototipo lo derivaba del
   nombre editable — la app real no); (e) tiempos de relámpago los fija el SERVER;
   (f) la comisión de plataforma en puntos es un sink auditable (ledger + dust).
-  PENDIENTE fase 2: integración del front (Privy React SDK + ApiBettingService +
-  borrar multitud simulada + ticker/pozos por polling 5s) y deploy.
+- **FASE 2 front (2026-07-04)**: `apps/web` integrado — login real con Privy
+  (@privy-io/react-auth, VITE_PRIVY_APP_ID en .env.local), `ApiBettingService`
+  implementa la interfaz de fase 1 contra apps/api, multitud simulada BORRADA
+  (el mock queda en services/mockBettingService.js como referencia, ya no se
+  importa), ticker desde /activity y pozos por polling 5s con lastHit derivado
+  de la diferencia de pools (el pulso late con actividad real), La Ficha vía
+  /ficha/start+end (el server acredita), referidos con refCode real (el LinkModal
+  también acepta links /i/{codigo}), privadas por /unlock. Wallet = sheet "pronto".
+  El código de una privada propia se recuerda en memoria local para compartir
+  (el server no lo devuelve NUNCA); tras recargar, la tarjeta muestra solo link.
+  PENDIENTE fase 2: prueba de fuego de dos navegadores (dueño) y deploy
+  (Vercel front + Railway/Render api).
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en

@@ -38,7 +38,8 @@ export function Connect({ onConnect, now }) {
           </div>
         </div>
 
-        <button onClick={() => onConnect(false)} className="press" style={{
+        {/* fase 2: los tres caminos abren el login REAL de Privy (google/email/twitter) */}
+        <button onClick={onConnect} className="press" style={{
           width: "100%", border: "none", borderRadius: 18, padding: "18px",
           fontFamily: "Syne", fontWeight: 800, fontSize: 17, color: C.bg, cursor: "pointer",
           background: "#FFFFFF",
@@ -46,15 +47,15 @@ export function Connect({ onConnect, now }) {
         }}>
           <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 17 }}>G</span> Continuar con Google
         </button>
-        <button onClick={() => onConnect(false)} className="press" style={{
+        <button onClick={onConnect} className="press" style={{
           width: "100%", borderRadius: 18, padding: "16px", marginTop: 10, cursor: "pointer",
           fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.text,
           background: "transparent", border: `1.5px solid ${C.line}`,
         }}>Entrar con email</button>
-        <button onClick={() => onConnect(true)} className="press" style={{
+        <button onClick={onConnect} className="press" style={{
           ...ghost, width: "100%", justifyContent: "center", marginTop: 12, fontSize: 13,
         }}>
-          <Wallet size={15} /> Ya tengo wallet
+          <Wallet size={15} /> Entrar de otra forma
         </button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, color: C.faint, fontSize: 12 }}>
           <ShieldCheck size={14} /> Jugás gratis con puntos · la wallet, cuando vos quieras

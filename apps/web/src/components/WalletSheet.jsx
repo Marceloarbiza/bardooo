@@ -2,8 +2,10 @@ import { X } from "lucide-react";
 import { C } from "../theme";
 import { ghost } from "./ui/styles";
 
-/* Sheet "Activá tu saldo USDC": la wallet es la graduación, no la entrada. */
-export function WalletSheet({ onClose, onActivate }) {
+/* Sheet "Activá tu saldo USDC" — fase 2: los duelos de plata real todavía no
+   están (banner "pronto", como manda PLAN.md). La wallet embebida + USDC
+   llegan con las fases 3-4; este sheet queda como teaser de la graduación.   */
+export function WalletSheet({ onClose }) {
   return (
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "flex-end", justifyContent: "center",
@@ -18,15 +20,15 @@ export function WalletSheet({ onClose, onActivate }) {
           <button onClick={onClose} className="press" style={{ ...ghost, padding: 6 }}><X size={20} /></button>
         </div>
         <p style={{ color: C.dim, fontSize: 13.5, lineHeight: 1.55, margin: "0 0 16px" }}>
-          Tu wallet se crea sola desde tu cuenta, sin frases raras ni apps extra. Cargás con tarjeta o cripto y jugás los duelos de plata real. El gas lo paga BARDOOO.
+          Tu wallet se va a crear sola desde tu cuenta, sin frases raras ni apps extra. Cargás con tarjeta o cripto y jugás los duelos de plata real. El gas lo paga BARDOOO.
         </p>
-        <button onClick={onActivate} className="press" style={{
-          width: "100%", border: "none", borderRadius: 16, padding: "16px", cursor: "pointer",
-          fontFamily: "Syne", fontWeight: 800, fontSize: 16, color: C.bg,
-          background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 10px 30px ${C.gold}44`,
-        }}>Activar wallet (demo: +500 USDC)</button>
+        <div style={{
+          width: "100%", border: `1px dashed ${C.gold}66`, borderRadius: 16, padding: "16px",
+          fontFamily: "Syne", fontWeight: 800, fontSize: 16, color: C.gold, textAlign: "center",
+          background: `${C.gold}0d`, boxSizing: "border-box",
+        }}>Pronto ⚡ los duelos de USDC están en camino</div>
         <p style={{ color: C.faint, fontSize: 11, margin: "12px 0 0", textAlign: "center", lineHeight: 1.5 }}>
-          En la app real: wallet embebida (Privy / Web3Auth) creada desde tu login + depósito con tarjeta.
+          Mientras tanto: La Ficha diaria e invitar amigos suman puntos para jugar.
         </p>
       </div>
     </div>

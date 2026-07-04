@@ -47,7 +47,14 @@ export async function buildServer(opts: ServerOpts) {
     req.user = null;
     if (!req.headers.authorization) return;
     const { privyId, nameHint } = await opts.verifyToken(req.headers.authorization);
-    const u = await getOrCreateUser(privyId, nameHint);
+    // el front manda el nombre de Privy (google/email) URI-encoded; solo se usa
+    // en el PRIMER login, para el alta (después el nombre vive en la DB)
+    let headerHint: string | undefined;
+    const raw = req.headers["x-name-hint"];
+    if (typeof raw === "string" && raw) {
+      try { headerHint = decodeURIComponent(raw); } catch { headerHint = undefined; }
+    }
+    const u = await getOrCreateUser(privyId, nameHint ?? headerHint);
     req.user = { id: u.id, handle: u.handle };
   });
   const requireUser = (req: { user: { id: string; handle: string } | null }) => {

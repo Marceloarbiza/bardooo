@@ -16,15 +16,13 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn }) {
 
   const submit = () => {
     if (!valid) return;
-    const launch = Date.now();
+    // los tiempos del relámpago los fija el SERVER (cierre = ahora + ventana;
+    // deadline = cierre + 30 min): el cliente solo manda la ventana elegida
     onCreate({
       question: question.trim(), stakeMode, fixedAmount: Number(fixedAmount),
       maxStake: 0, minStake: stakeMode === "fixed" ? Number(fixedAmount) : 5,
       maxBettors: 0, creatorBps: 700, isPrivate, code: isPrivate ? code.trim() : "",
-      relampago: true, launch,
-      closeTime: launch + windowMin * 60000,
-      resolveTime: launch + windowMin * 60000 + 1000,
-      deadline: launch + (windowMin + 30) * 60000, // regla fija: cierre + 30 min o se anula
+      relampago: true, windowMin,
     });
   };
 

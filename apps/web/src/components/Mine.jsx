@@ -1,12 +1,12 @@
 import { ArrowRight, Hourglass, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
 import { C } from "../theme";
-import { money } from "../lib/format";
+import { amt } from "../lib/format";
 import { BetCard } from "./Arena";
 import { Empty } from "./ui/bits";
 import { ProfileCard } from "./Profile";
 
 /* =============================== MINE =============================== */
-export function Mine({ bets, now, onOpen, earned, onInvite, profile, setProfile, walletOn, walletAddr, fire }) {
+export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName, onLogout, walletOn, walletAddr, fire }) {
   const mine = bets.filter((b) => b.creator.mine || b.myStake[0] > 0 || b.myStake[1] > 0);
   const created = bets.filter((b) => b.creator.mine);
   const pending = created.filter((b) => b.status === "locked");
@@ -16,13 +16,12 @@ export function Mine({ bets, now, onOpen, earned, onInvite, profile, setProfile,
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: C.faint, marginBottom: 2 }}>TU RINCÓN</div>
       <div style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 24, marginBottom: 14 }}>Mis apuestas</div>
 
-      <ProfileCard profile={profile} setProfile={setProfile}
-        walletOn={walletOn} walletAddr={walletAddr} fire={fire} />
+      <ProfileCard profile={profile} onSaveName={onSaveName} onLogout={onLogout} />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
         <Stat icon={<Sparkles size={13} />} label="Creadas" v={created.length} />
         <Stat icon={<Users size={13} />} label="Jugando" v={playing.length} />
-        <Stat icon={<TrendingUp size={13} />} label="Comisiones" v={money(earned)} col={C.gold} />
+        <Stat icon={<TrendingUp size={13} />} label="Comisiones" v={amt("pts", earned)} col={C.gold} />
       </div>
 
       <div onClick={onInvite} className="press" style={{

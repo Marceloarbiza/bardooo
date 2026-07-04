@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
 import { C } from "./theme";
 import { amt } from "./lib/format";
 import { sfx } from "./lib/sfx";
 import { useSound } from "./hooks/useSound";
 import { useMusic } from "./hooks/useMusic";
-import { useMockBettingService, seedTicker } from "./services/mockBettingService";
+import { useApiBettingService } from "./services/apiBettingService";
 import { Style } from "./components/ui/Style";
 import { Bg } from "./components/ui/Bg";
 import { Burst, Toast } from "./components/ui/bits";
+import { Logo } from "./components/ui/brand";
 import { Header } from "./components/Header";
 import { Ticker } from "./components/Ticker";
 import { Connect } from "./components/Connect";
@@ -22,59 +24,40 @@ import { QuickModal } from "./components/QuickModal";
 import { WalletSheet } from "./components/WalletSheet";
 
 /* ===========================================================================
-   BARDOOO v2 — la arena del duelo. Prototipo funcional, blockchain SIMULADA.
-   Toda la logica de producto es real (crear, apostar, resolver, cobrar); la
-   "cadena" vive detras de la interfaz BettingService (mock en fase 1) para
-   reemplazarse por API (fase 2) y wagmi/viem (fase 3) sin tocar el diseno.
-   La matematica de pago es espejo del contrato via @bardooo/core.
-   PLATFORM_BPS se leera de la factory en la app real (ver docs/INTEGRATION.md).
+   BARDOOO — fase 2: multi-usuario REAL. Login con Privy, estado en el server
+   (apps/api), pozos y ticker en vivo por polling. La UI habla solo con la
+   interfaz BettingService (hoy ApiBettingService; en fase 3, la cadena).
+   La multitud simulada de fase 1 SE FUE: lo que late, late de verdad.
 =========================================================================== */
 
 export default function App() {
-  const [connected, setConnected] = useState(false);
-  const [balance, setBalance] = useState(0);
-  const [walletOn, setWalletOn] = useState(false);   // la wallet es la graduacion, no la entrada
-  const [profile, setProfile] = useState({ name: "vos", handle: "@vos" });
-  const WALLET_ADDR = "0x7bC4f2a9E11d84c3B6f09A5d21c7E38F4a9D9E2a"; // demo: en la app real la crea Privy
-  const [showWallet, setShowWallet] = useState(false);
-  const [points, setPoints] = useState(60); // puntos BARDOOO: se ganan con La Ficha e invitando, se apuestan en duelos de puntos
+  const { ready, authenticated, user: privyUser, login, logout, getAccessToken } = usePrivy();
+
+  const nameHint =
+    privyUser?.google?.name ||
+    privyUser?.twitter?.name ||
+    privyUser?.email?.address?.split("@")[0] ||
+    undefined;
+
+  const svc = useApiBettingService({ getToken: getAccessToken, nameHint, enabled: authenticated });
+  const { bets, activity, me, flightsLeft } = svc;
+
   const [view, setView] = useState("feed");
   const [activeId, setActiveId] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [toast, setToast] = useState(null);
-  const [earned, setEarned] = useState(0);
+  const [earned, setEarned] = useState(0); // comisiones cobradas en esta sesión (pts)
   const [burst, setBurst] = useState(false);
-  const [ticker, setTicker] = useState(seedTicker);
-  const [tries, setTries] = useState(3); // vuelos diarios de La Ficha (en el prototipo: por sesion)
-  const [showQuick, setShowQuick] = useState(false); // modal relampago
-  const [showLink, setShowLink] = useState(false);   // abrir apuesta por link
+  const [showWallet, setShowWallet] = useState(false);
+  const [showQuick, setShowQuick] = useState(false);
+  const [showLink, setShowLink] = useState(false);
 
   const { soundOn, play, toggleSound } = useSound();
   const { musicOn, toggleMusic, startIfOn } = useMusic();
-  const svc = useMockBettingService(now);
-  const { bets } = svc;
 
-  const onPrize = (prize) => {
-    setTries((t) => t - 1);
-    if (prize > 0) {
-      setPoints((x) => x + prize);
-      if (prize >= 10) { setBurst(true); setTimeout(() => setBurst(false), 1700); play("win"); }
-      else play("tick");
-      fire(prize >= 10 ? `¡PERFECTO! Ganaste ${prize} pts` : `Ganaste ${prize} pts para apostar`, prize >= 10 ? "win" : "ok");
-    } else {
-      fire("Ni un caño esta vez. ¡Otra!", "err");
-    }
-  };
-
-  const invite = () => {
-    const txt = "Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ bardooo.app/i/vos";
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(txt).then(() => {
-        setPoints((x) => x + 25); play("tick");
-        fire("Link copiado · +25 pts (en la app real se acreditan cuando tu amigo entra)");
-      });
-    } else fire("No se pudo copiar", "err");
-  };
+  const connected = authenticated && !!me;
+  const points = me?.points ?? 0;
+  const profile = { name: me?.name ?? "vos", handle: me?.handle ?? "@vos" };
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -85,93 +68,119 @@ export default function App() {
     setToast({ msg, kind, id: Math.random() });
     setTimeout(() => setToast(null), 2600);
   };
-  const pushTick = (e) => setTicker((t) => [e, ...t].slice(0, 12));
 
-  /* ---- multitud simulada: en la app real, esto son los eventos BetPlaced ---- */
+  /* blip suave cuando OTRO usuario mueve un pozo (reemplaza a la multitud fake) */
   useEffect(() => {
-    if (!connected) return;
-    let alive = true, to;
-    const crowd = ["@leo", "@caro.p", "@nachovlc", "@flor__", "@tomas.g", "@romi", "@seba.k", "@juli", "@mateo_ok", "@vale.re"];
-    const loop = () => {
-      to = setTimeout(() => {
-        if (!alive) return;
-        const open = svc.list().filter((b) => b.status === "open" && !b.isPrivate);
-        if (open.length > 0) {
-          const b = open[Math.floor(Math.random() * open.length)];
-          // leve sesgo hacia el lado que va ganando: la manada sigue a la manada
-          const side = Math.random() < (b.pools[1] + 10) / (b.pools[0] + b.pools[1] + 20) ? 1 : 0;
-          const amt = b.stakeMode === "fixed" ? b.fixedAmount : [5, 10, 15, 20, 25, 50][Math.floor(Math.random() * 6)];
-          const u = crowd[Math.floor(Math.random() * crowd.length)];
-          pushTick({ u, amt, side });
-          play("crowd");
-          svc.externalBet(b.id, side, amt);
-        }
-        loop();
-      }, 2500 + Math.random() * 5000);
-    };
-    loop();
-    return () => { alive = false; clearTimeout(to); };
+    svc.setOnLiveHit(() => play("crowd"));
+  }, []);
+
+  /* bienvenida: una sola vez por sesión, cuando el /me llega tras el login */
+  const welcomed = useRef(false);
+  useEffect(() => {
+    if (!connected || welcomed.current) return;
+    welcomed.current = true;
+    fire(`¡Adentro, ${me.name}! Tenés ${me.points.toLocaleString("es-UY")} pts`);
   }, [connected]);
 
-  /* ---------- acciones "on-chain" via BettingService (mock en fase 1) ---------- */
-  const placeBet = (id, option, amount) => {
-    const r = svc.placeBet(id, option, amount, { walletOn, points, balance });
-    if (!r) return;
+  /* ---------- acciones contra el server (validación allá, toasts acá) ---------- */
+
+  const placeBet = async (id, option, amount) => {
+    const r = await svc.placeBet(id, option, amount);
     if (!r.ok) {
       if (r.needWallet) setShowWallet(true);
       return fire(r.error, "err");
     }
-    if (r.currency === "pts") setPoints((x) => x - amount); else setBalance((x) => x - amount);
-    pushTick({ u: "@vos", amt: amount, side: option, cur: r.currency });
     play("tick");
     fire(`Metiste ${amt(r.currency, amount)} al ${option === 1 ? "SÍ" : "NO"}`);
+    svc.refreshAll().catch(() => {});
   };
 
-  const createBet = (form) => {
-    const nextId = svc.createBet(form, profile, walletOn);
-    fire(form.isPrivate
+  const createBet = async (form) => {
+    const r = await svc.createBet(form);
+    if (!r.ok) return fire(r.error, "err");
+    fire(r.bet.isPrivate
       ? "Privada creada · compartí el link para que entren"
-      : walletOn ? "Lanzada en USDC y en puntos" : "Apuesta lanzada");
-    setActiveId(nextId);
+      : "Apuesta lanzada");
+    setActiveId(r.bet.id);
     setView("detail");
   };
 
-  const resolve = (id, option) => {
-    const r = svc.resolve(id, option);
-    if (!r) return;
+  const resolve = async (id, option) => {
+    const r = await svc.resolve(id, option);
+    if (!r.ok) return fire(r.error, "err");
     if (r.cancelled) return fire("Sin contraparte: apuesta anulada, se devuelve todo", "err");
-    if (r.currency === "pts") setPoints((x) => x + r.creatorCut);
-    else { setBalance((x) => x + r.creatorCut); setEarned((x) => x + r.creatorCut); }
+    setEarned((x) => x + r.creatorCut);
     play("win");
     fire(`Resultado cargado · tu comisión: ${amt(r.currency, r.creatorCut)}`, "win");
   };
 
-  const claim = (id) => {
-    const r = svc.claim(id);
-    if (!r) return;
+  const claim = async (id) => {
+    const r = await svc.claim(id);
     if (!r.ok) return fire(r.error, "err");
-    if (r.currency === "pts") setPoints((x) => x + r.pay); else setBalance((x) => x + r.pay);
     setBurst(true); setTimeout(() => setBurst(false), 1700);
     play("win");
     fire(`Cobraste ${amt(r.currency, r.pay)}`, "win");
   };
 
-  const refundMy = (id) => {
-    const r = svc.refund(id);
-    if (!r) return;
-    if (r.currency === "pts") setPoints((x) => x + r.total); else setBalance((x) => x + r.total);
+  const refundMy = async (id) => {
+    const r = await svc.refund(id);
+    if (!r.ok) return fire(r.error, "err");
     fire(`Recuperaste ${amt(r.currency, r.total)}`);
   };
 
-  const activateWallet = () => {
-    setWalletOn(true);
-    setShowWallet(false);
-    setBalance(500); // demo: en la app real, wallet embebida (Privy/Web3Auth) + deposito
-    play("win");
-    fire("Wallet activada · 500 USDC (demo)");
+  const invite = () => {
+    const code = me?.refCode ?? "";
+    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ bardooo.app/i/${code}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(txt).then(() => {
+        play("tick");
+        fire("Link copiado · sumás 25 pts cuando tu amigo entre y juegue");
+      });
+    } else fire("No se pudo copiar", "err");
   };
 
+  const saveName = async (name) => {
+    try {
+      await svc.updateName(name);
+      fire("Nombre guardado");
+    } catch {
+      fire("No se pudo guardar el nombre", "err");
+    }
+  };
+
+  /* premio de La Ficha: lo acredita el SERVER; acá solo la fiesta */
+  const onPrize = (prize) => {
+    if (prize > 0) {
+      if (prize >= 10) { setBurst(true); setTimeout(() => setBurst(false), 1700); play("win"); }
+      else play("tick");
+      fire(prize >= 10 ? `¡PERFECTO! Ganaste ${prize} pts` : `Ganaste ${prize} pts para apostar`, prize >= 10 ? "win" : "ok");
+    } else {
+      fire("Ni un caño esta vez. ¡Otra!", "err");
+    }
+  };
+
+  const connect = async () => {
+    try { await sfx.ensure(); } catch (e) {} // el click es el gesto que habilita el audio
+    login();
+  };
+
+  /* audio de bienvenida recién cuando la sesión está adentro */
+  useEffect(() => {
+    if (!connected) return;
+    try {
+      startIfOn();
+      if (soundOn) sfx.tick();
+    } catch (e) {}
+  }, [connected]);
+
+  const ticker = activity.map((a) => ({ u: a.u, amt: a.amt, side: a.side, cur: a.cur }));
   const active = bets.find((b) => b.id === activeId) || null;
+
+  const splash = (
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+      <div className="blink"><Logo size={24} /></div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center" }}>
@@ -182,53 +191,50 @@ export default function App() {
         color: C.text, boxShadow: "0 0 90px rgba(0,0,0,.6)",
       }}>
         <Bg />
-        {!connected ? (
-          <Connect onConnect={async (withWallet) => {
-            setConnected(true);
-            if (withWallet) { setWalletOn(true); setBalance(500); }
-            try {
-              await sfx.ensure();      // el click de conectar es el gesto que habilita el audio
-              startIfOn();
-              if (soundOn) sfx.tick(); // blip de bienvenida
-            } catch (e) {}
-            fire(withWallet ? "Wallet conectada · 500 USDC (demo)" : "¡Adentro! Tenés 60 pts para empezar");
-          }} now={now} />
+        {!ready ? (
+          splash
+        ) : !authenticated ? (
+          <Connect onConnect={connect} now={now} />
+        ) : !me ? (
+          splash
         ) : (
           <>
-            <Header balance={balance} points={points} walletOn={walletOn} onWallet={() => setShowWallet(true)} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic} />
-            <Ticker items={ticker} />
+            <Header balance={0} points={points} walletOn={false} onWallet={() => setShowWallet(true)} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic} />
+            {ticker.length > 0 && <Ticker items={ticker} />}
             <div style={{ padding: "0 16px 130px", position: "relative" }}>
               {view === "feed" && (
-                <Feed bets={bets} now={now} tries={tries} onGame={() => setView("game")} onLink={() => setShowLink(true)}
+                <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
               {view === "game" && (
-                <Game onBack={() => setView("feed")} tries={tries} onPrize={onPrize} play={play} />
+                <Game onBack={() => setView("feed")} tries={flightsLeft} onPrize={onPrize} play={play}
+                  fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
               )}
               {view === "detail" && active && (
                 <Detail b={active} now={now} fire={fire}
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}
-              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={walletOn} />}
+              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={false} />}
               {view === "mine" && (
                 <Mine bets={bets} now={now} earned={earned} onInvite={invite}
-                  profile={profile} setProfile={setProfile}
-                  walletOn={walletOn} walletAddr={WALLET_ADDR} fire={fire}
+                  profile={profile} onSaveName={saveName} onLogout={logout}
+                  walletOn={false} walletAddr={""} fire={fire}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
             </div>
             <BottomNav view={view} setView={(v) => { setView(v); if (v !== "detail") setActiveId(null); }} onQuick={() => setShowQuick(true)} />
             {showLink && (
-              <LinkModal bets={bets} onClose={() => setShowLink(false)}
+              <LinkModal onClose={() => setShowLink(false)}
+                openByLink={svc.openByLink} useReferral={svc.useReferral}
                 onOpen={(id) => { setShowLink(false); setActiveId(id); setView("detail"); }}
                 fire={fire} />
             )}
             {showWallet && (
-              <WalletSheet onClose={() => setShowWallet(false)} onActivate={activateWallet} />
+              <WalletSheet onClose={() => setShowWallet(false)} />
             )}
             {showQuick && (
-              <QuickModal walletOn={walletOn}
+              <QuickModal walletOn={false}
                 onClose={() => setShowQuick(false)}
                 onCreate={(f) => { setShowQuick(false); createBet(f); }}
                 goFull={() => { setShowQuick(false); setView("create"); }} />

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@bardooo/core": "workspace:*",
+    "@privy-io/react-auth": "^2.4.3",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

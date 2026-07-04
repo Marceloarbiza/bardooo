@@ -1,30 +1,26 @@
 import { useState } from "react";
-import { Check, Wallet } from "lucide-react";
+import { Check, LogOut } from "lucide-react";
 import { C } from "../theme";
 import { Identicon } from "./ui/Identicon";
 import { ghost } from "./ui/styles";
 
-/* Tarjeta de perfil: anillo grande (el bicho), nombre editable inline,
-   dirección de wallet acortada con copiar cuando está activa. */
-export function ProfileCard({ profile, setProfile, walletOn, walletAddr, fire }) {
+/* Tarjeta de perfil: anillo grande (el bicho), nombre editable inline.
+   Fase 2: el nombre se guarda en el SERVER; el handle es INMUTABLE (CLAUDE.md)
+   — el bicho sale del handle, así que tu bicho no cambia al renombrarte.      */
+export function ProfileCard({ profile, onSaveName, onLogout }) {
   const [editing, setEditing] = useState(false);
   const [tmp, setTmp] = useState(profile.name);
-  const seed = walletOn ? walletAddr : profile.handle;
-  const short = walletAddr.slice(0, 6) + "…" + walletAddr.slice(-4);
   const save = () => {
-    const name = tmp.trim() || profile.name;
-    setProfile({ name, handle: "@" + name.toLowerCase().replace(/\s+/g, "") });
+    const name = tmp.trim();
+    if (name && name !== profile.name) onSaveName(name);
     setEditing(false);
-  };
-  const copyAddr = () => {
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(walletAddr).then(() => fire("Dirección copiada"));
   };
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 13, background: `linear-gradient(160deg, ${C.bg3}, ${C.bg2})`,
       border: `1px solid ${C.line}`, borderRadius: 18, padding: 14, marginBottom: 14,
     }}>
-      <Identicon seed={seed} size={52} />
+      <Identicon seed={profile.handle} size={52} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
           <div style={{ display: "flex", gap: 8 }}>
@@ -47,15 +43,12 @@ export function ProfileCard({ profile, setProfile, walletOn, walletAddr, fire })
             <div style={{ color: C.dim, fontSize: 12.5 }}>{profile.handle}</div>
           </div>
         )}
-        {walletOn ? (
-          <button onClick={copyAddr} className="press" style={{
-            ...ghost, gap: 5, marginTop: 5, fontSize: 12, padding: 0, color: C.gold,
-          }}>
-            <Wallet size={12} /> {short} · copiar
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 5 }}>
+          <span style={{ color: C.faint, fontSize: 11.5 }}>Tu bicho vive en tu handle</span>
+          <button onClick={onLogout} className="press" style={{ ...ghost, gap: 4, padding: 0, fontSize: 11.5 }}>
+            <LogOut size={11} /> salir
           </button>
-        ) : (
-          <div style={{ color: C.faint, fontSize: 11.5, marginTop: 5 }}>Tu bicho cambia al activar la wallet</div>
-        )}
+        </div>
       </div>
     </div>
   );
