@@ -1,0 +1,13 @@
+.env
+out/
+cache/
+lib/
+node_modules/
+broadcast/
+dist/
+*.local
+.DS_Store
+
+# claude local
+.claude/settings.local.json
+.claude/tsc-cache/

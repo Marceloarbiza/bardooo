@@ -1,0 +1,19 @@
+{
+  "name": "@bardooo/core",
+  "private": true,
+  "version": "0.1.0",
+  "description": "LA matemática de BARDOOO: espejo exacto del contrato P2PBetting.sol. Enteros de 6 decimales (unidades USDC), bigint, sin floats en el reparto.",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  }
+}

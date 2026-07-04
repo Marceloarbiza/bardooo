@@ -1,0 +1,7 @@
+{
+  "name": "@bardooo/api",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Backend de puntos (Fastify + Prisma). Vacío en fase 1: nace en fase 2 según PLAN.md.",
+  "type": "module"
+}
