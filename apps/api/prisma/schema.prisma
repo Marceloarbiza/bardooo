@@ -1,0 +1,159 @@
+// Schema de la fase PUNTOS (PLAN.md fase 2).
+// Reglas que este schema hace cumplir a nivel datos:
+//  - Un solo lado por usuario: @@unique(userId, betId) en Stake — la fila fija la
+//    opción; apostar de nuevo al mismo lado ACUMULA amount, al otro lado revienta.
+//  - El código de las privadas se guarda HASHEADO (codeHash): jamás viaja al cliente.
+//  - TODO movimiento de puntos pasa por PointsLedger (User.points es saldo cacheado,
+//    se actualiza en la MISMA transacción que la fila del ledger).
+//  - open→locked se deriva por tiempo al leer; en DB solo viven open/resolved/cancelled.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // OJO: nombre propio (no DATABASE_URL) porque el shell de esta máquina exporta
+  // un DATABASE_URL global de otra infra y Prisma prioriza el env del proceso
+  // sobre el .env — con el nombre genérico el schema terminaba en OTRA base.
+  url      = env("BARDOOO_DATABASE_URL")
+}
+
+enum Currency {
+  pts
+  usdc // fase 3: espejo on-chain. En fase 2 los duelos usdc quedan deshabilitados ("pronto").
+}
+
+enum StakeMode {
+  free
+  fixed
+  capped // sigue en el contrato, oculto en la UI (CLAUDE.md)
+}
+
+enum BetStatus {
+  open // "locked" se deriva: open && now >= closeTime
+  resolved
+  cancelled
+}
+
+enum LedgerReason {
+  ficha
+  referido
+  apuesta // débito al apostar
+  premio // crédito al cobrar (claim)
+  comision // crédito al creador al resolver
+  refund // devolución por anulación/cancelación
+  bienvenida // los 60 pts iniciales
+}
+
+model User {
+  id          String         @id @default(cuid())
+  privyId     String         @unique
+  name        String
+  handle      String         @unique // inmutable (CLAUDE.md); el bicho sale de acá hasta que haya wallet
+  walletAddr  String?
+  points      Int            @default(0) // saldo cacheado; la verdad auditable es el ledger
+  refCode     String         @unique @default(cuid()) // código de referido propio
+  createdAt   DateTime       @default(now())
+  betsCreated Bet[]          @relation("creator")
+  stakes      Stake[]
+  ledger      PointsLedger[]
+  flights     Flight[]
+  referred    Referral?      @relation("referred") // a lo sumo UNA vez referido (anti-sybil)
+  referrals   Referral[]     @relation("referrer")
+}
+
+model Bet {
+  id            Int       @id @default(autoincrement())
+  creatorId     String
+  creator       User      @relation("creator", fields: [creatorId], references: [id])
+  question      String
+  currency      Currency  @default(pts)
+  stakeMode     StakeMode
+  fixedAmount   Int? // si fixed: monto exacto
+  minStake      Int
+  maxStake      Int       @default(0) // si capped: tope por usuario
+  maxBettors    Int       @default(0) // 0 = sin límite; tope TOTAL (nunca por lado)
+  creatorBps    Int
+  closeTime     DateTime
+  resolveTime   DateTime
+  status        BetStatus @default(open)
+  winningOption Int? // 0 NO / 1 SI
+  dust          Int       @default(0) // truncamiento del reparto; queda registrado para auditar
+  isPrivate     Boolean   @default(false)
+  codeHash     String? // sha256 del código en mayúsculas; NUNCA se expone
+  relampago    Boolean   @default(false)
+  launch       DateTime  @default(now())
+  deadline     DateTime? // relámpago: cierre + 30 min; sin resultado → anulación
+  mirrorOfId   Int?      @unique // gemelo pts de un duelo usdc (fase 3)
+  mirrorOf     Bet?      @relation("mirror", fields: [mirrorOfId], references: [id])
+  mirror       Bet?      @relation("mirror")
+  stakes       Stake[]
+  createdAt    DateTime  @default(now())
+
+  @@index([status, closeTime])
+  @@index([relampago, status, deadline])
+}
+
+model Stake {
+  id      Int     @id @default(autoincrement())
+  userId  String
+  user    User    @relation(fields: [userId], references: [id])
+  betId   Int
+  bet     Bet     @relation(fields: [betId], references: [id])
+  option  Int // 0 NO / 1 SI — la fila entera es EL lado del usuario
+  amount  Int // acumula si suma al mismo lado
+  settled Boolean @default(false) // ya cobró premio o refund
+
+  @@unique([userId, betId]) // regla de un solo lado, a nivel base de datos
+  @@index([betId])
+}
+
+model PointsLedger {
+  id        Int          @id @default(autoincrement())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  delta     Int // positivo o negativo, NUNCA cero
+  reason    LedgerReason
+  ref       String? // ej. "bet:12", "flight:abc", "referral:xyz"
+  createdAt DateTime     @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Flight {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  day       String // YYYY-MM-DD (tz del server) — 3 vuelos por día se cuenta por acá
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  score     Int?
+  prize     Int?
+
+  @@index([userId, day])
+}
+
+model Referral {
+  id         String    @id @default(cuid())
+  code       String // refCode del referrer al momento del alta
+  referrerId String
+  referrer   User      @relation("referrer", fields: [referrerId], references: [id])
+  referredId String    @unique // un usuario solo puede ser referido UNA vez
+  referred   User      @relation("referred", fields: [referredId], references: [id])
+  accredited Boolean   @default(false) // +25 recién con primer acción real (vuelo o apuesta)
+  createdAt  DateTime  @default(now())
+}
+
+model Activity {
+  id         Int      @id @default(autoincrement())
+  type       String // bet_created | bet_placed | resolved | claimed
+  userHandle String
+  betId      Int
+  amount     Int?
+  side       Int?
+  currency   Currency @default(pts)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}

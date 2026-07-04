@@ -115,7 +115,29 @@ HECHO:
   matemática en bigint 6 decimales y tests espejo del contrato (18 en verde:
   33_428_571 / 83_571_428 / dust 1 / tope 10e6 / split 3.9-9.1 / split flash);
   prototipo migrado a `apps/web` en componentes, mock detrás de la interfaz
-  `BettingService`. `pnpm test` y `pnpm build` en verde.
+  `BettingService`. `pnpm test` y `pnpm build` en verde. Criterio de salida
+  verificado a mano por el dueño. Repo: github.com/Marceloarbiza/bardooo.
+- **FASE 2 backend (2026-07-04)**: `apps/api` completo — Prisma schema (User/Bet/
+  Stake/PointsLedger/Flight/Referral/Activity), liquidación de puntos ENTEROS con
+  packages/core (test-first, números sagrados del contrato + fuzz), endpoints
+  Fastify con TODAS las validaciones server-side, auth Privy (token verificado en
+  cada request), privadas con codeHash sha256 (el código jamás viaja), La Ficha
+  anti-trampa (3/día + score ≤15 + duración ≥1.2s/caño, todo server), referidos
+  +25 diferido a primera acción real, ticker de Activity 24h, cron de relámpagos
+  vencidos con devolución automática. 42 tests de api en verde.
+  DECISIONES fase 2: (a) puntos son ENTEROS (granularidad 1 pt, dust absorbe, split
+  floor → creador se lleva el resto, igual que el contrato); (b) al CANCELAR se
+  devuelve automáticamente a todos en la misma transacción (en puntos no hay gas;
+  /refund queda de red de seguridad); (c) el premio SÍ es pull (claim) para
+  conservar el momento jackpot; (d) handle inmutable (el prototipo lo derivaba del
+  nombre editable — la app real no); (e) tiempos de relámpago los fija el SERVER;
+  (f) la comisión de plataforma en puntos es un sink auditable (ledger + dust).
+  PENDIENTE fase 2: integración del front (Privy React SDK + ApiBettingService +
+  borrar multitud simulada + ticker/pozos por polling 5s) y deploy.
+  OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
+  porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
+  Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en
+  el test: los imports ESM se ejecutan antes y Prisma captura la URL).
 
 PENDIENTE (tu trabajo, en orden):
 1. **Foundry**: `forge init` sobre esta estructura, instalar deps, hacer pasar
