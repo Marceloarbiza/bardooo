@@ -1,0 +1,112 @@
+/*  Panel de admin MÍNIMO (fase 5): por ahora, VOS sos la ventana de disputa.
+    Corre contra la DB que diga BARDOOO_DATABASE_URL (local por defecto;
+    para producción: exportar la DATABASE_PUBLIC_URL del Postgres de Railway).
+
+    Uso (desde apps/api):
+      pnpm admin bets                    → últimas 20 apuestas
+      pnpm admin bet 12                  → detalle + stakes de la apuesta 12
+      pnpm admin cancel 12 "motivo"      → anula una apuesta de PUNTOS (devuelve todo)
+      pnpm admin user @handle            → usuario + últimos movimientos
+      pnpm admin points @handle 50 "premio del stream"   → ajuste con motivo
+      pnpm admin points @handle -20 "corrección doble acreditación"
+*/
+
+import "dotenv/config";
+import { prisma } from "../src/db";
+import { systemCancelBet } from "../src/services/bets";
+
+const [, , cmd, ...args] = process.argv;
+
+async function main() {
+  switch (cmd) {
+    case "bets": {
+      const bets = await prisma.bet.findMany({
+        orderBy: { createdAt: "desc" }, take: 20,
+        include: { creator: { select: { handle: true } }, stakes: true },
+      });
+      for (const b of bets) {
+        const pool = b.stakes.reduce((a, s) => a + s.amount, 0);
+        console.log(
+          `#${b.id} [${b.status}] ${b.currency} ${b.isPrivate ? "🔒" : "  "} ` +
+          `${b.creator.handle} — "${b.question.slice(0, 50)}" pozo=${pool} bettors=${b.stakes.length}`
+        );
+      }
+      break;
+    }
+
+    case "bet": {
+      const id = Number(args[0]);
+      const b = await prisma.bet.findUniqueOrThrow({
+        where: { id },
+        include: { creator: true, stakes: { include: { user: true } }, mirror: true, mirrorOf: true },
+      });
+      console.log(JSON.stringify({
+        id: b.id, q: b.question, currency: b.currency, status: b.status,
+        winner: b.winningOption, creator: b.creator.handle, dust: b.dust,
+        chainAddress: b.chainAddress, mirrorOfId: b.mirrorOfId, mirrorId: b.mirror?.id ?? null,
+        closeTime: b.closeTime, resolveTime: b.resolveTime, deadline: b.deadline,
+      }, null, 2));
+      for (const s of b.stakes) {
+        console.log(`  ${s.user.handle} → opción ${s.option} por ${s.amount} ${s.settled ? "(liquidado)" : ""}`);
+      }
+      break;
+    }
+
+    case "cancel": {
+      const id = Number(args[0]);
+      const motivo = args[1];
+      if (!motivo) throw new Error("Falta el motivo: pnpm admin cancel <id> \"motivo\"");
+      const b = await prisma.bet.findUniqueOrThrow({ where: { id } });
+      if (b.currency === "usdc") throw new Error("Los duelos usdc se anulan on-chain (cancel/forceRefund), no desde acá");
+      const r = await systemCancelBet(id);
+      if (!r) throw new Error(`La apuesta #${id} no está open (status actual: ${b.status})`);
+      await prisma.activity.create({
+        data: { type: "resolved", userHandle: "@bardooo", betId: id, currency: "pts" },
+      });
+      console.log(`Apuesta #${id} anulada con devolución completa. Motivo registrado: ${motivo}`);
+      break;
+    }
+
+    case "user": {
+      const handle = args[0];
+      const u = await prisma.user.findUniqueOrThrow({ where: { handle } });
+      console.log(JSON.stringify({
+        id: u.id, name: u.name, handle: u.handle, points: u.points,
+        walletAddr: u.walletAddr, refCode: u.refCode, createdAt: u.createdAt,
+      }, null, 2));
+      const ledger = await prisma.pointsLedger.findMany({
+        where: { userId: u.id }, orderBy: { createdAt: "desc" }, take: 15,
+      });
+      for (const l of ledger) {
+        console.log(`  ${l.createdAt.toISOString().slice(0, 16)} ${l.delta > 0 ? "+" : ""}${l.delta} ${l.reason} ${l.ref ?? ""}`);
+      }
+      break;
+    }
+
+    case "points": {
+      const [handle, deltaStr, ...motivoParts] = args;
+      const delta = Math.trunc(Number(deltaStr));
+      const motivo = motivoParts.join(" ").trim();
+      if (!handle || !Number.isFinite(delta) || delta === 0 || !motivo)
+        throw new Error('Uso: pnpm admin points @handle <delta≠0> "motivo"');
+      const u = await prisma.user.findUniqueOrThrow({ where: { handle } });
+      if (delta < 0 && u.points + delta < 0)
+        throw new Error(`${handle} tiene ${u.points} pts: no puede quedar negativo`);
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: u.id }, data: { points: { increment: delta } } }),
+        prisma.pointsLedger.create({
+          data: { userId: u.id, delta, reason: "ajuste", ref: `admin: ${motivo}` },
+        }),
+      ]);
+      console.log(`${handle}: ${u.points} → ${u.points + delta} pts (ajuste: ${motivo})`);
+      break;
+    }
+
+    default:
+      console.log("Comandos: bets · bet <id> · cancel <id> \"motivo\" · user @handle · points @handle <delta> \"motivo\"");
+  }
+}
+
+main()
+  .catch((e) => { console.error(e.message); process.exit(1); })
+  .finally(() => prisma.$disconnect());

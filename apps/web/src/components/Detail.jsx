@@ -12,7 +12,7 @@ import { Amt } from "./ui/animated";
 import { ghost, resolveBtn } from "./ui/styles";
 
 /* =============================== DETAIL =============================== */
-export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fire }) {
+export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fire, refCode }) {
   const lockedSide = b.myStake[1] > 0 ? 1 : b.myStake[0] > 0 ? 0 : null;
   const [option, setOption] = useState(lockedSide ?? 1);
   const [amount, setAmount] = useState(b.stakeMode === "fixed" ? b.fixedAmount : b.minStake);
@@ -36,7 +36,10 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
     ? payoutFor(b.pools, b.winningOption, b.myStake[b.winningOption], fee) : 0;
 
   const share = () => {
-    const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá: bardooo.app/bet/${b.id}${b.code ? ` · código: ${b.code}` : ""}`;
+    // TODO link compartido lleva tu código de referido (CLAUDE.md): un duelo
+    // concreto convierte mejor que la invitación genérica, misma recompensa
+    const ref = refCode ? `?i=${refCode}` : "";
+    const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá: ${window.location.origin}/bet/${b.id}${ref}${b.code ? ` · código: ${b.code}` : ""}`;
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => fire("Link copiado · si alguien entra con tu link, sumás 25 pts"));
     else fire("No se pudo copiar", "err");
   };
@@ -107,7 +110,7 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
             background: `${C.bg}99`, border: `1px solid ${C.line}`, borderRadius: 12,
             padding: "9px 12px", marginBottom: 12, fontSize: 13.5,
           }}>
-            <span style={{ color: C.dim }}>bardooo.app/bet/{b.id}</span>
+            <span style={{ color: C.dim }}>{(typeof window !== "undefined" ? window.location.host : "bardooo.app")}/bet/{b.id}</span>
             {b.code && (
               <span style={{
                 marginLeft: "auto", border: `1px solid ${C.gold}55`, background: `${C.gold}14`,

@@ -231,6 +231,22 @@ HECHO:
   mantenerlo fondeado y medir gasto por apuesta (es marketing).
   NOTA: habilitar "Embedded wallets" en el dashboard de Privy si el
   createWallet() falla en runtime (config del SDK ya está).
+- **FASE 5 primera tanda (2026-07-05)**:
+  - DEEP LINKS reales: /bet/:id (abre el detalle; si es privada con código,
+    cae al gate del LinkModal), /i/:codigo y ?i=codigo (el referido se guarda
+    en localStorage ANTES del login — sobrevive el redirect de Privy — y se
+    registra al entrar). vercel.json con rewrites SPA. TODOS los links de
+    compartir usan window.location.origin y llevan ?i={refCode} (CLAUDE.md:
+    todo share es de referido).
+  - PWA: manifest.webmanifest + icon.svg (el anillo partido) + theme-color:
+    instalable en el teléfono desde Chrome/Android.
+  - ADMIN CLI (apps/api: `pnpm admin`): bets · bet <id> · cancel <id> "motivo"
+    (solo pts; usdc se anula on-chain) · user @handle · points @handle <delta>
+    "motivo" (ledger reason `ajuste`, nunca sin motivo). Para prod: exportar
+    BARDOOO_DATABASE_URL con la DATABASE_PUBLIC_URL de Railway.
+  - Juego responsable fase puntos: recordatorio suave cada 45 min de sesión.
+  Pendiente fase 5: analytics del embudo (Posthog — necesita cuenta), rate
+  limits más finos, y la beta con humanos (del dueño).
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en

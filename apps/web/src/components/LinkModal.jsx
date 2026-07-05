@@ -7,15 +7,15 @@ import { ghost } from "./ui/styles";
    Fase 2: el server decide. Se acepta bardooo.app/bet/{id} (código validado
    SERVER-SIDE, jamás viaja al cliente) y también bardooo.app/i/{codigo} para
    registrar una invitación.                                                 */
-export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire }) {
+export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire, initialBetId = null }) {
   const [txt, setTxt] = useState("");
-  const [pendId, setPendId] = useState(null); // apuesta encontrada que pide codigo
+  const [pendId, setPendId] = useState(initialBetId); // apuesta que pide codigo (deep link entra directo acá)
   const [codeIn, setCodeIn] = useState("");
   const [busy, setBusy] = useState(false);
 
   const open = async () => {
     if (busy) return;
-    const clean = txt.trim().replace(/\s*·.*$/, "");
+    const clean = txt.trim().replace(/\s*·.*$/, "").replace(/\?.*$/, ""); // sin query (?i=ref)
 
     // ¿es un link de invitación? bardooo.app/i/{codigo}
     const inv = /\/i\/([A-Za-z0-9_-]+)\s*$/.exec(clean);
@@ -30,7 +30,7 @@ export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire }) {
         : "Esa invitación ya estaba registrada");
     }
 
-    const m = /(\d+)\s*$/.exec(clean);
+    const m = /\/bet\/(\d+)\s*$/.exec(clean) ?? /(\d+)\s*$/.exec(clean);
     if (!m) return fire("No encontramos esa apuesta. Revisá el link", "err");
     setBusy(true);
     const r = await openByLink(Number(m[1]));

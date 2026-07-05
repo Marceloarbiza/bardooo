@@ -44,6 +44,7 @@ enum LedgerReason {
   comision // crédito al creador al resolver
   refund // devolución por anulación/cancelación
   bienvenida // los 60 pts iniciales
+  ajuste // corrección manual de admin — SIEMPRE con motivo en ref (fase 5)
 }
 
 model User {

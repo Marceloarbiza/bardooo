@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- El anillo partido de BARDOOO: el duelo hecho símbolo -->
+  <rect width="512" height="512" rx="104" fill="#0C0616"/>
+  <defs>
+    <clipPath id="si"><polygon points="96,96 326,96 160,416 96,416"/></clipPath>
+    <clipPath id="no"><polygon points="352,96 416,96 416,416 186,416"/></clipPath>
+  </defs>
+  <circle cx="256" cy="256" r="160" fill="#00F0C0" clip-path="url(#si)"/>
+  <circle cx="256" cy="256" r="160" fill="#FF2E7C" clip-path="url(#no)"/>
+  <circle cx="256" cy="256" r="74" fill="#0C0616"/>
+</svg>

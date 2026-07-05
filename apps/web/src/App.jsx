@@ -52,6 +52,8 @@ export default function App() {
   const [showWallet, setShowWallet] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showLink, setShowLink] = useState(false);
+  const [linkPrefill, setLinkPrefill] = useState(null); // deep link que pide código
+  const [pendingBetId, setPendingBetId] = useState(null);
 
   const { soundOn, play, toggleSound } = useSound();
   const { musicOn, toggleMusic, startIfOn } = useMusic();
@@ -74,6 +76,49 @@ export default function App() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  /* ---- deep links (fase 5): /bet/:id, /i/:codigo y ?i=codigo ----
+     El código de referido se guarda ANTES del login: sobrevive el redirect
+     de Privy y se registra recién cuando la sesión está adentro.           */
+  useEffect(() => {
+    const path = window.location.pathname;
+    const bet = /^\/bet\/(\d+)/.exec(path);
+    const inv = /^\/i\/([A-Za-z0-9_-]+)/.exec(path);
+    const q = new URLSearchParams(window.location.search).get("i");
+    const ref = inv?.[1] ?? q;
+    if (ref) { try { localStorage.setItem("bardooo:ref", ref); } catch (e) {} }
+    if (bet) setPendingBetId(Number(bet[1]));
+    if (bet || inv || q) window.history.replaceState({}, "", "/");
+  }, []);
+
+  const deepHandled = useRef(false);
+  useEffect(() => {
+    if (!connected || deepHandled.current) return;
+    deepHandled.current = true;
+    (async () => {
+      let code = null;
+      try { code = localStorage.getItem("bardooo:ref"); localStorage.removeItem("bardooo:ref"); } catch (e) {}
+      if (code) {
+        const r = await svc.useReferral(code).catch(() => null);
+        if (r?.ok && r.registered) fire("¡Invitación registrada! Tu amigo suma 25 pts cuando juegues");
+      }
+      if (pendingBetId != null) {
+        const r = await svc.openByLink(pendingBetId);
+        if (r.ok) { setActiveId(r.bet.id); setView("detail"); }
+        else if (r.needsCode) { setLinkPrefill(pendingBetId); setShowLink(true); }
+        else fire(r.error, "err");
+      }
+    })();
+  }, [connected, pendingBetId]);
+
+  /* juego responsable (fase puntos): recordatorio suave de tiempo de sesión */
+  useEffect(() => {
+    if (!connected) return;
+    const t = setInterval(() => {
+      fire("Llevás un buen rato en la arena. Un respiro no le viene mal a nadie 🧉");
+    }, 45 * 60000);
+    return () => clearInterval(t);
+  }, [connected]);
 
   const fire = (msg, kind = "ok") => {
     setToast({ msg, kind, id: Math.random() });
@@ -199,7 +244,7 @@ export default function App() {
 
   const invite = () => {
     const code = me?.refCode ?? "";
-    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ bardooo.app/i/${code}`;
+    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ ${window.location.origin}/i/${code}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(txt).then(() => {
         play("tick");
@@ -280,7 +325,7 @@ export default function App() {
                   fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
               )}
               {view === "detail" && active && (
-                <Detail b={active} now={now} fire={fire}
+                <Detail b={active} now={now} fire={fire} refCode={me?.refCode}
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}
@@ -294,9 +339,10 @@ export default function App() {
             </div>
             <BottomNav view={view} setView={(v) => { setView(v); if (v !== "detail") setActiveId(null); }} onQuick={() => setShowQuick(true)} />
             {showLink && (
-              <LinkModal onClose={() => setShowLink(false)}
+              <LinkModal onClose={() => { setShowLink(false); setLinkPrefill(null); }}
                 openByLink={svc.openByLink} useReferral={svc.useReferral}
-                onOpen={(id) => { setShowLink(false); setActiveId(id); setView("detail"); }}
+                initialBetId={linkPrefill}
+                onOpen={(id) => { setShowLink(false); setLinkPrefill(null); setActiveId(id); setView("detail"); }}
                 fire={fire} />
             )}
             {showWallet && (
