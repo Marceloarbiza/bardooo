@@ -103,6 +103,14 @@ Comandos de la app: `pnpm install`, `pnpm dev` (levanta apps/web), `pnpm test`
 - `platformFeeBps = 300` (3%), `gracePeriod = 14400` (4 h), `minStake` típico
   `5e6` (5 USDC).
 
+### DECISIÓN DEL DUEÑO (2026-07-05): login con wallet DESDE LA ENTRADA
+"Mi público también es cripto": la pantalla de entrada ofrece login con wallet
+además de Google/email/Twitter (matiza el "la wallet es la graduación, no la
+puerta de entrada" — la graduación sigue siendo para el público social; el
+cripto-nativo entra directo con su wallet). Requiere el toggle de Wallet login
+en el dashboard de Privy. El usuario que entra con wallet igual pasa por
+"Firmar y vincular" en Activar (1 firma) para atarla a su cuenta BARDOOO.
+
 ### DECISIONES DEL DUEÑO (2026-07-05, fase 3) — reemplazan lo anterior
 1. **Comisiones FIJAS, sin slider del creador**: normal = 3% plataforma + 7%
    creador; relámpago = 1% plataforma + 9% creador. Total al apostador SIEMPRE

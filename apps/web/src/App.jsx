@@ -283,6 +283,9 @@ export default function App() {
     try {
       if (method === "google" || method === "twitter") {
         await initOAuth({ provider: method });
+      } else if (method === "wallet") {
+        // cripto-nativos: SIWE con su wallet (la extensión maneja su propia UI)
+        login({ loginMethods: ["wallet"] });
       } else {
         login(); // email: el modal de Privy no necesita popups
       }

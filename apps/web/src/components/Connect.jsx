@@ -53,11 +53,18 @@ export function Connect({ onConnect, now }) {
           fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.text,
           background: "transparent", border: `1.5px solid ${C.line}`,
         }}>Entrar con email</button>
-        <button onClick={() => onConnect("twitter")} className="press" style={{
-          ...ghost, width: "100%", justifyContent: "center", marginTop: 12, fontSize: 13,
-        }}>
-          <Wallet size={15} /> Continuar con X (Twitter)
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={() => onConnect("twitter")} className="press" style={{
+            ...ghost, flex: 1, justifyContent: "center", fontSize: 13,
+          }}>
+            Continuar con X
+          </button>
+          <button onClick={() => onConnect("wallet")} className="press" style={{
+            ...ghost, flex: 1, justifyContent: "center", fontSize: 13,
+          }}>
+            <Wallet size={15} /> Entrar con wallet
+          </button>
+        </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, color: C.faint, fontSize: 12 }}>
           <ShieldCheck size={14} /> Jugás gratis con puntos · la wallet, cuando vos quieras
         </div>

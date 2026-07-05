@@ -13,9 +13,10 @@ createRoot(document.getElementById("root")).render(
   <PrivyProvider
     appId={PRIVY_APP_ID}
     config={{
-      // login social/email: la wallet NO es la puerta de entrada (CLAUDE.md).
-      // La embebida se crea recién al tocar "Activar" (la graduación).
-      loginMethods: ["google", "email", "twitter"],
+      // decisión del dueño (2026-07-05): el público también es cripto —
+      // la wallet entra desde la puerta. La embebida sigue naciendo en
+      // "Activar" para el público social.
+      loginMethods: ["google", "email", "twitter", "wallet"],
       appearance: {
         theme: "dark",
         accentColor: C.si,
