@@ -164,19 +164,20 @@ export async function buildServer(opts: ServerOpts) {
     windowMin: z.number().optional(),
   });
 
-  app.post("/bets", async (req) => {
+  // límites finos (fase 5): crear y resolver son acciones caras/sensibles
+  app.post("/bets", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req) => {
     const user = requireUser(req);
     return { bet: await createBet(user.id, createSchema.parse(req.body)) };
   });
 
-  app.post("/bets/:id/place", async (req) => {
+  app.post("/bets/:id/place", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req) => {
     const user = requireUser(req);
     const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
     const { option, amount } = z.object({ option: z.number().int(), amount: z.number() }).parse(req.body);
     return { bet: await placeBet(user.id, id, option, amount) };
   });
 
-  app.post("/bets/:id/resolve", async (req) => {
+  app.post("/bets/:id/resolve", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req) => {
     const user = requireUser(req);
     const { id } = z.object({ id: z.coerce.number().int() }).parse(req.params);
     const { option } = z.object({ option: z.number().int() }).parse(req.body);
@@ -212,6 +213,18 @@ export async function buildServer(opts: ServerOpts) {
     const user = requireUser(req);
     const { flightId, score } = z.object({ flightId: z.string(), score: z.number() }).parse(req.body);
     return await endFlight(user.id, flightId, score);
+  });
+
+  /* ---- embudo (fase 5): hitos no derivables de otras tablas (hoy: share) ---- */
+  app.post("/events", async (req) => {
+    const user = requireUser(req);
+    const { kind } = z.object({ kind: z.enum(["share"]) }).parse(req.body);
+    // solo la PRIMERA vez cuenta (unique); repetir es no-op
+    await prisma.funnelEvent.createMany({
+      data: [{ userId: user.id, kind }],
+      skipDuplicates: true,
+    });
+    return { ok: true };
   });
 
   /* --------------------- gasless (fase 4): relay + faucet --------------------- */

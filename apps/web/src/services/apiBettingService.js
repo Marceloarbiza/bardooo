@@ -253,6 +253,11 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     }
   }, [call]);
 
+  /* embudo: marca el hito "primer share" (fire-and-forget, primera vez cuenta) */
+  const track = useCallback((kind) => {
+    call("/events", { method: "POST", body: { kind } }).catch(() => {});
+  }, [call]);
+
   const useReferral = useCallback(async (code) => {
     try {
       const r = await call("/referrals/use", { method: "POST", body: { code } });
@@ -286,7 +291,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   return {
     bets, activity, me, flightsLeft, gaslessOn, relay, faucetServer,
     placeBet, createBet, resolve, claim, refund,
-    openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet,
+    openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet, track,
     refreshAll, refreshMe,
     setOnLiveHit: (fn) => { onLiveHitRef.current = fn; },
   };

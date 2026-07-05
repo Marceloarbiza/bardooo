@@ -152,6 +152,19 @@ model Referral {
   createdAt  DateTime  @default(now())
 }
 
+// Embudo (fase 5): LAS métricas del proyecto — login → primer vuelo → primera
+// apuesta → primer share → activación wallet. Una fila por usuario y hito
+// (unique): solo importan las PRIMERAS veces. login/vuelo/apuesta/wallet se
+// derivan de las tablas reales; acá solo cae lo no derivable (share).
+model FunnelEvent {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  kind      String // "share" (el resto del embudo se deriva de User/Flight/Stake)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, kind])
+}
+
 // Estado del poller de la cadena (una sola fila, id = 1)
 model IndexerState {
   id        Int    @id @default(1)

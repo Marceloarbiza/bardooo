@@ -12,7 +12,7 @@ import { Amt } from "./ui/animated";
 import { ghost, resolveBtn } from "./ui/styles";
 
 /* =============================== DETAIL =============================== */
-export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fire, refCode }) {
+export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fire, refCode, track }) {
   const lockedSide = b.myStake[1] > 0 ? 1 : b.myStake[0] > 0 ? 0 : null;
   const [option, setOption] = useState(lockedSide ?? 1);
   const [amount, setAmount] = useState(b.stakeMode === "fixed" ? b.fixedAmount : b.minStake);
@@ -40,7 +40,10 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
     // concreto convierte mejor que la invitación genérica, misma recompensa
     const ref = refCode ? `?i=${refCode}` : "";
     const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá: ${window.location.origin}/bet/${b.id}${ref}${b.code ? ` · código: ${b.code}` : ""}`;
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => fire("Link copiado · si alguien entra con tu link, sumás 25 pts"));
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => {
+      track?.("share"); // hito del embudo
+      fire("Link copiado · si alguien entra con tu link, sumás 25 pts");
+    });
     else fire("No se pudo copiar", "err");
   };
 

@@ -245,8 +245,19 @@ HECHO:
     "motivo" (ledger reason `ajuste`, nunca sin motivo). Para prod: exportar
     BARDOOO_DATABASE_URL con la DATABASE_PUBLIC_URL de Railway.
   - Juego responsable fase puntos: recordatorio suave cada 45 min de sesión.
-  Pendiente fase 5: analytics del embudo (Posthog — necesita cuenta), rate
-  limits más finos, y la beta con humanos (del dueño).
+- **FASE 5 segunda tanda (2026-07-05)**:
+  - EMBUDO self-hosted (sin Posthog): login/vuelo/apuesta/wallet se DERIVAN de
+    las tablas reales; solo "primer share" se trackea (POST /events, tabla
+    FunnelEvent con unique userId+kind). Reporte: `pnpm admin funnel`.
+  - Ícono PNG para iOS (apple-touch-icon 180px + icon-512 para el manifest;
+    generados del SVG con qlmanage+sips — Safari no toma SVG en el home screen).
+  - Rate limits finos: crear 10/min, apostar 30/min, resolver 10/min.
+  - Sanitización de preguntas: sin caracteres de control, espacios colapsados.
+  - README: plan de arbitraje manual documentado (checklist pre-mainnet ✓) +
+    instrucciones de auto-deploy por GitHub (conexión de dashboards, del dueño).
+  Fase 5 restante: solo cosas del dueño (beta con humanos, conectar
+  auto-deploy) y lo pre-mainnet (auditoría, legal, disputa on-chain, límites
+  de depósito/autoexclusión, AML/KYC).
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en

@@ -102,8 +102,27 @@ async function main() {
       break;
     }
 
+    case "funnel": {
+      // LAS métricas del proyecto (PLAN.md): login → vuelo → apuesta → share → wallet
+      const usuarios = await prisma.user.count({ where: { NOT: { privyId: { startsWith: "wallet:" } } } });
+      const conVuelo = (await prisma.flight.groupBy({ by: ["userId"] })).length;
+      const conApuesta = (await prisma.stake.groupBy({ by: ["userId"] })).length;
+      const conShare = await prisma.funnelEvent.count({ where: { kind: "share" } });
+      const conWallet = await prisma.user.count({
+        where: { walletAddr: { not: null }, NOT: { privyId: { startsWith: "wallet:" } } },
+      });
+      const pct = (n: number) => (usuarios ? ` (${Math.round((n / usuarios) * 100)}%)` : "");
+      console.log(`EMBUDO BARDOOO`);
+      console.log(`  1. Login (usuarios reales): ${usuarios}`);
+      console.log(`  2. Primer vuelo de La Ficha: ${conVuelo}${pct(conVuelo)}`);
+      console.log(`  3. Primera apuesta:          ${conApuesta}${pct(conApuesta)}`);
+      console.log(`  4. Primer share:             ${conShare}${pct(conShare)}`);
+      console.log(`  5. Wallet activada:          ${conWallet}${pct(conWallet)}`);
+      break;
+    }
+
     default:
-      console.log("Comandos: bets · bet <id> · cancel <id> \"motivo\" · user @handle · points @handle <delta> \"motivo\"");
+      console.log("Comandos: bets · bet <id> · cancel <id> \"motivo\" · user @handle · points @handle <delta> \"motivo\" · funnel");
   }
 }
 

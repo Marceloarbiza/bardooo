@@ -248,6 +248,7 @@ export default function App() {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(txt).then(() => {
         play("tick");
+        svc.track("share"); // hito del embudo
         fire("Link copiado · sumás 25 pts cuando tu amigo entre y juegue");
       });
     } else fire("No se pudo copiar", "err");
@@ -325,7 +326,7 @@ export default function App() {
                   fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
               )}
               {view === "detail" && active && (
-                <Detail b={active} now={now} fire={fire} refCode={me?.refCode}
+                <Detail b={active} now={now} fire={fire} refCode={me?.refCode} track={svc.track}
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}

@@ -64,6 +64,29 @@ forge script script/Deploy.s.sol --rpc-url amoy --broadcast
   variables `VITE_PRIVY_APP_ID` y `VITE_API_URL` (URL pública de la API).
 - **Privy**: agregar el dominio del front a los allowed origins de la app.
 
+## Administración y disputas (fase beta)
+
+Mientras no exista la ventana de disputa on-chain, **el arbitraje es manual**
+(este es el "plan de arbitraje documentado" del checklist pre-mainnet):
+
+1. Un usuario reporta un duelo mal resuelto → revisás con `pnpm admin bet <id>`
+   (en `apps/api`; contra prod, exportar `BARDOOO_DATABASE_URL` con la
+   `DATABASE_PUBLIC_URL` del Postgres de Railway).
+2. Duelos de PUNTOS: `pnpm admin cancel <id> "motivo"` anula con devolución
+   completa; `pnpm admin points @handle <delta> "motivo"` corrige saldos
+   (todo queda auditado en el ledger con motivo).
+3. Duelos USDC: la corrección es on-chain (cancel del creador o forceRefund
+   tras el grace de 4 h) — el server nunca puede tocar fondos de la cadena.
+4. Métricas del embudo: `pnpm admin funnel`.
+
+## Deploys
+
+Manuales por CLI: `railway up --service api --detach` (API) y
+`vercel deploy --prod --yes` (front), ambos desde la raíz. Para deploy
+automático en cada push: conectar el repo de GitHub desde los dashboards de
+Railway (Settings → Source) y Vercel (Settings → Git) — requiere autorizar
+la app de GitHub una sola vez.
+
 ## Seguridad
 
 Código NO auditado. Solo testnet. Antes de cualquier mainnet con dinero real:

@@ -133,7 +133,8 @@ export interface CreateBetInput {
 }
 
 export async function createBet(userId: string, input: CreateBetInput) {
-  const q = input.question.trim();
+  // sin caracteres de control ni saltos raros: la pregunta es texto plano
+  const q = input.question.replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim();
   if (q.length < 7 || q.length > MAX_QUESTION)
     throw new ApiError(400, "BAD_QUESTION", "La pregunta tiene que tener entre 7 y 200 caracteres");
   if (input.currency === "usdc") throw errors.usdcSoon(); // fase 3
