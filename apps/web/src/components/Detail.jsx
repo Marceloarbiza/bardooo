@@ -21,7 +21,7 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
   const left = b.closeTime - now;
   const closed = b.status !== "open" || left <= 0;
   const canResolve = b.creator.mine && b.status === "locked";
-  const fee = PLATFORM_BPS + b.creatorBps;
+  const fee = b.feeBps ?? PLATFORM_BPS + b.creatorBps; // el server manda el total (10% fijo)
   const total = b.pools[0] + b.pools[1];
   const pSi = total > 0 ? Math.round((b.pools[1] / total) * 100) : 50;
   const heroHit = b.lastHit && now - b.lastHit.t < 1500 ? (b.lastHit.side === 1 ? C.si : C.no) : null;

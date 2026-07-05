@@ -24,15 +24,18 @@ function findBet(id: number) {
 }
 
 /* ---------------- serialización (lo que ve el front) ---------------- */
-/* El código de las privadas JAMÁS sale de acá: solo `hasCode`.          */
+/* El código de las privadas JAMÁS sale de acá: solo `hasCode`.
+   Los duelos usdc se guardan en MICRO-unidades: acá salen en unidades de
+   pantalla (÷1e6), así el front usa la misma matemática para todo.       */
 export function serializeBet(b: BetWithAll, forUserId?: string, now = Date.now()) {
+  const unit = b.currency === "usdc" ? 1e6 : 1;
   const pools: [number, number] = [0, 0];
   const myStake: [number, number] = [0, 0];
   let settledMine = false;
   for (const s of b.stakes) {
-    pools[s.option] += s.amount;
+    pools[s.option] += s.amount / unit;
     if (forUserId && s.userId === forUserId) {
-      myStake[s.option] += s.amount;
+      myStake[s.option] += s.amount / unit;
       settledMine = s.settled;
     }
   }
@@ -41,11 +44,12 @@ export function serializeBet(b: BetWithAll, forUserId?: string, now = Date.now()
     question: b.question,
     currency: b.currency,
     stakeMode: b.stakeMode,
-    fixedAmount: b.fixedAmount,
-    minStake: b.minStake,
-    maxStake: b.maxStake,
+    fixedAmount: b.fixedAmount === null ? null : b.fixedAmount / unit,
+    minStake: b.minStake / unit,
+    maxStake: b.maxStake / unit,
     maxBettors: b.maxBettors,
     creatorBps: b.creatorBps,
+    feeBps: PLATFORM_BPS + b.creatorBps, // total que sale del pozo (10% fijo)
     closeTime: b.closeTime.getTime(),
     resolveTime: b.resolveTime.getTime(),
     status: deriveStatus(b, now),
@@ -55,6 +59,8 @@ export function serializeBet(b: BetWithAll, forUserId?: string, now = Date.now()
     relampago: b.relampago,
     launch: b.launch.getTime(),
     deadline: b.deadline?.getTime() ?? null,
+    chainAddress: b.chainAddress, // duelos usdc: el front escribe contra este contrato
+    mirrorOfId: b.mirrorOfId,
     pools,
     bettors: b.stakes.length,
     creator: { name: b.creator.name, handle: b.creator.handle, mine: b.creator.id === forUserId },
@@ -63,15 +69,17 @@ export function serializeBet(b: BetWithAll, forUserId?: string, now = Date.now()
   };
 }
 
-/** open→locked (y relámpago vencido→cancelled) se derivan por tiempo al leer.
- *  El cron materializa la anulación (con refunds) hasta un minuto después. */
+/** open→locked (y relámpago pts vencido→cancelled) se derivan por tiempo al
+ *  leer. El cron materializa la anulación (con refunds) hasta un minuto
+ *  después. Los usdc solo cambian de estado por eventos de la cadena
+ *  (lockedAt refleja lockBetting() on-chain).                              */
 function deriveStatus(
-  b: { status: string; closeTime: Date; relampago: boolean; deadline: Date | null },
+  b: { status: string; closeTime: Date; relampago: boolean; deadline: Date | null; lockedAt: Date | null },
   now: number
 ): "open" | "locked" | "resolved" | "cancelled" {
   if (b.status !== "open") return b.status as "resolved" | "cancelled";
   if (b.relampago && b.deadline && now > b.deadline.getTime()) return "cancelled";
-  if (now >= b.closeTime.getTime()) return "locked";
+  if (b.lockedAt || now >= b.closeTime.getTime()) return "locked";
   return "open";
 }
 
@@ -212,6 +220,7 @@ export async function placeBet(userId: string, betId: number, option: number, am
   return prisma.$transaction(async (tx) => {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b) throw errors.notFound();
+    if (b.currency === "usdc") throw errors.chainOnly(); // se apuesta desde la wallet, no por API
     const now = Date.now();
 
     // estado y ventana (validación de SERVER, como el contrato)
@@ -278,6 +287,7 @@ export async function resolveBet(userId: string, betId: number, option: number) 
   return prisma.$transaction(async (tx) => {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b) throw errors.notFound();
+    if (b.currency === "usdc") throw errors.chainOnly(); // se resuelve on-chain; el espejo lo sigue
     if (b.creatorId !== userId) throw errors.notCreator();
     if (b.status !== "open") throw errors.badState();
     const now = Date.now();
@@ -330,6 +340,7 @@ export async function claimBet(userId: string, betId: number) {
   return prisma.$transaction(async (tx) => {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b) throw errors.notFound();
+    if (b.currency === "usdc") throw errors.chainOnly(); // se cobra on-chain (pull del contrato)
     if (b.status !== "resolved" || b.winningOption === null) throw errors.badState();
 
     const mine = b.stakes.find((s) => s.userId === userId);
@@ -399,6 +410,7 @@ export async function refundBet(userId: string, betId: number) {
   return prisma.$transaction(async (tx) => {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b) throw errors.notFound();
+    if (b.currency === "usdc") throw errors.chainOnly(); // refund() se llama on-chain
     if (b.status !== "cancelled") throw errors.badState();
     const mine = b.stakes.find((s) => s.userId === userId);
     if (!mine || mine.amount <= 0) throw errors.nothingToClaim();
@@ -409,6 +421,51 @@ export async function refundBet(userId: string, betId: number) {
       data: { userId, delta: mine.amount, reason: "refund", ref: `bet:${betId}` },
     });
     return { refunded: mine.amount };
+  });
+}
+
+/* ---------------- espejo: resoluciones disparadas por la CADENA ----------------
+   El indexer llama esto cuando el duelo usdc gemelo se resuelve/cancela
+   on-chain: la acción del creador es UNA sola (en la cadena) y el gemelo de
+   puntos la sigue solo. Sin chequeos de creador ni de tiempos: la cadena ya
+   es la autoridad.                                                            */
+
+export async function systemResolveBet(betId: number, option: number) {
+  return prisma.$transaction(async (tx) => {
+    const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
+    if (!b || b.status !== "open") return null; // ya liquidado: idempotente
+
+    const r = computeResolution(
+      { creatorBps: b.creatorBps, relampago: b.relampago },
+      b.stakes.map((s) => ({ userId: s.userId, option: s.option, amount: s.amount })),
+      option
+    );
+
+    if (r.kind === "cancelled") {
+      await cancelWithRefunds(tx, b.id, b.stakes);
+      return { cancelled: true as const };
+    }
+
+    await tx.bet.update({
+      where: { id: b.id },
+      data: { status: "resolved", winningOption: option, dust: r.dust },
+    });
+    if (r.creatorCut > 0) {
+      await tx.user.update({ where: { id: b.creatorId }, data: { points: { increment: r.creatorCut } } });
+      await tx.pointsLedger.create({
+        data: { userId: b.creatorId, delta: r.creatorCut, reason: "comision", ref: `bet:${b.id}` },
+      });
+    }
+    return { cancelled: false as const, creatorCut: r.creatorCut };
+  });
+}
+
+export async function systemCancelBet(betId: number) {
+  return prisma.$transaction(async (tx) => {
+    const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
+    if (!b || b.status !== "open") return null;
+    await cancelWithRefunds(tx, b.id, b.stakes);
+    return { cancelled: true };
   });
 }
 

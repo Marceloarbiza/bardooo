@@ -5,7 +5,7 @@
     "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @bardooo/api exec prisma generate"
   },
   "deploy": {
-    "startCommand": "cd apps/api && pnpm exec prisma db push --skip-generate && pnpm start",
+    "startCommand": "cd apps/api && pnpm exec prisma db push --skip-generate --accept-data-loss && pnpm start",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5

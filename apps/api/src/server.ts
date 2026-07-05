@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
+import { getAddress, verifyMessage } from "viem";
 import { prisma } from "./db";
 import { ApiError, errors } from "./errors";
 import type { TokenVerifier } from "./auth";
@@ -117,6 +118,30 @@ export async function buildServer(opts: ServerOpts) {
     const user = requireUser(req);
     const { name } = z.object({ name: z.string().trim().min(1).max(20) }).parse(req.body);
     return { user: serializeUser(await updateName(user.id, name)) };
+  });
+
+  // Vincular wallet (fase 3): el usuario FIRMA un mensaje con su wallet y acá
+  // se verifica la firma — nadie vincula una wallet ajena. La wallet vinculada
+  // habilita el espejo automático (crear on-chain crea también el gemelo pts)
+  // y que sus apuestas on-chain aparezcan con su bicho y no como sombra.
+  app.post("/me/wallet", async (req) => {
+    const user = requireUser(req);
+    const { address, signature } = z
+      .object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/), signature: z.string() })
+      .parse(req.body);
+    const wallet = getAddress(address);
+
+    const taken = await prisma.user.findFirst({
+      where: { walletAddr: { equals: wallet, mode: "insensitive" }, id: { not: user.id } },
+    });
+    if (taken) throw errors.walletTaken();
+
+    const message = `BARDOOO: vinculo la wallet ${wallet.toLowerCase()} a mi cuenta ${user.handle}`;
+    const ok = await verifyMessage({ address: wallet, message, signature: signature as `0x${string}` }).catch(() => false);
+    if (!ok) throw errors.badSignature();
+
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { walletAddr: wallet } });
+    return { user: serializeUser(updated) };
   });
 
   /* ------------------------------ apuestas ------------------------------ */

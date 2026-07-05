@@ -14,5 +14,7 @@ export default defineConfig({
     env: {
       BARDOOO_DATABASE_URL: TEST_DB,
     },
+    // los archivos de test comparten la DB de test: en serie, no en paralelo
+    fileParallelism: false,
   },
 });

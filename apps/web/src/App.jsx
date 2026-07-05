@@ -6,6 +6,7 @@ import { sfx } from "./lib/sfx";
 import { useSound } from "./hooks/useSound";
 import { useMusic } from "./hooks/useMusic";
 import { useApiBettingService } from "./services/apiBettingService";
+import { useChainBetting, chainErrorMsg } from "./services/chainBetting";
 import { Style } from "./components/ui/Style";
 import { Bg } from "./components/ui/Bg";
 import { Burst, Toast } from "./components/ui/bits";
@@ -59,6 +60,11 @@ export default function App() {
   const points = me?.points ?? 0;
   const profile = { name: me?.name ?? "vos", handle: me?.handle ?? "@vos" };
 
+  /* fase 3: escrituras usdc directo a la cadena; lecturas siguen por la API */
+  const chain = useChainBetting({ me, onStatus: (m) => fire(m) });
+  const walletOn = chain.linked;
+  const balance = walletOn ? chain.balance : 0;
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
@@ -84,7 +90,23 @@ export default function App() {
 
   /* ---------- acciones contra el server (validación allá, toasts acá) ---------- */
 
+  const isChainBet = (id) => {
+    const b = bets.find((x) => x.id === id);
+    return b?.currency === "usdc" ? b : null;
+  };
+
   const placeBet = async (id, option, amount) => {
+    const b = isChainBet(id);
+    if (b) {
+      if (!walletOn) { setShowWallet(true); return fire("Este duelo se juega con USDC: activá tu wallet", "err"); }
+      try {
+        await chain.placeBet(b.chainAddress, option, amount);
+        play("tick");
+        fire(`Metiste ${amt("usdc", amount)} al ${option === 1 ? "SÍ" : "NO"} · confirmado en la cadena`);
+        svc.refreshAll().catch(() => {});
+      } catch (e) { fire(chainErrorMsg(e), "err"); }
+      return;
+    }
     const r = await svc.placeBet(id, option, amount);
     if (!r.ok) {
       if (r.needWallet) setShowWallet(true);
@@ -96,6 +118,18 @@ export default function App() {
   };
 
   const createBet = async (form) => {
+    // con wallet vinculada, los duelos PÚBLICOS nacen en la cadena; el indexer
+    // crea el gemelo de puntos solo. Las privadas siguen en puntos (la
+    // privacidad es de la app, no del contrato — backlog fase siguiente).
+    if (walletOn && !form.isPrivate) {
+      try {
+        await chain.createBet(form);
+        fire("Lanzada en USDC · el duelo (y su gemelo en puntos) aparece en segundos", "win");
+        setView("feed");
+        svc.refreshAll().catch(() => {});
+      } catch (e) { fire(chainErrorMsg(e), "err"); }
+      return;
+    }
     const r = await svc.createBet(form);
     if (!r.ok) return fire(r.error, "err");
     fire(r.bet.isPrivate
@@ -106,6 +140,16 @@ export default function App() {
   };
 
   const resolve = async (id, option) => {
+    const b = isChainBet(id);
+    if (b) {
+      try {
+        await chain.resolve(b.chainAddress, option);
+        play("win");
+        fire("Resultado cargado en la cadena · el gemelo de puntos se resuelve solo", "win");
+        svc.refreshAll().catch(() => {});
+      } catch (e) { fire(chainErrorMsg(e), "err"); }
+      return;
+    }
     const r = await svc.resolve(id, option);
     if (!r.ok) return fire(r.error, "err");
     if (r.cancelled) return fire("Sin contraparte: apuesta anulada, se devuelve todo", "err");
@@ -115,6 +159,17 @@ export default function App() {
   };
 
   const claim = async (id) => {
+    const b = isChainBet(id);
+    if (b) {
+      try {
+        await chain.claim(b.chainAddress);
+        setBurst(true); setTimeout(() => setBurst(false), 1700);
+        play("win");
+        fire("¡Cobraste tu premio on-chain!", "win");
+        svc.refreshAll().catch(() => {});
+      } catch (e) { fire(chainErrorMsg(e), "err"); }
+      return;
+    }
     const r = await svc.claim(id);
     if (!r.ok) return fire(r.error, "err");
     setBurst(true); setTimeout(() => setBurst(false), 1700);
@@ -123,6 +178,15 @@ export default function App() {
   };
 
   const refundMy = async (id) => {
+    const b = isChainBet(id);
+    if (b) {
+      try {
+        await chain.refund(b.chainAddress);
+        fire("Recuperaste tu stake on-chain");
+        svc.refreshAll().catch(() => {});
+      } catch (e) { fire(chainErrorMsg(e), "err"); }
+      return;
+    }
     const r = await svc.refund(id);
     if (!r.ok) return fire(r.error, "err");
     fire(`Recuperaste ${amt(r.currency, r.total)}`);
@@ -199,7 +263,7 @@ export default function App() {
           splash
         ) : (
           <>
-            <Header balance={0} points={points} walletOn={false} onWallet={() => setShowWallet(true)} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic} />
+            <Header balance={balance} points={points} walletOn={walletOn} onWallet={() => setShowWallet(true)} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic} />
             {ticker.length > 0 && <Ticker items={ticker} />}
             <div style={{ padding: "0 16px 130px", position: "relative" }}>
               {view === "feed" && (
@@ -215,11 +279,11 @@ export default function App() {
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}
-              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={false} />}
+              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={walletOn} />}
               {view === "mine" && (
                 <Mine bets={bets} now={now} earned={earned} onInvite={invite}
                   profile={profile} onSaveName={saveName} onLogout={logout}
-                  walletOn={false} walletAddr={""} fire={fire}
+                  walletOn={walletOn} walletAddr={chain.address ?? ""} fire={fire}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
             </div>
@@ -231,10 +295,11 @@ export default function App() {
                 fire={fire} />
             )}
             {showWallet && (
-              <WalletSheet onClose={() => setShowWallet(false)} />
+              <WalletSheet onClose={() => setShowWallet(false)} chain={chain} me={me}
+                onLink={svc.linkWallet} fire={fire} />
             )}
             {showQuick && (
-              <QuickModal walletOn={false}
+              <QuickModal walletOn={walletOn}
                 onClose={() => setShowQuick(false)}
                 onCreate={(f) => { setShowQuick(false); createBet(f); }}
                 goFull={() => { setShowQuick(false); setView("create"); }} />

@@ -34,4 +34,7 @@ export const errors = {
   flightTooFast: () => new ApiError(400, "FLIGHT_TOO_FAST", "Ese vuelo fue demasiado rápido para ser real"),
   badReferral: () => new ApiError(400, "BAD_REFERRAL", "Ese código de invitación no sirve"),
   unauthorized: () => new ApiError(401, "UNAUTHORIZED", "Iniciá sesión para hacer eso"),
+  chainOnly: () => new ApiError(400, "CHAIN_ONLY", "Este duelo vive en la cadena: se juega desde tu wallet"),
+  walletTaken: () => new ApiError(409, "WALLET_TAKEN", "Esa wallet ya está vinculada a otra cuenta"),
+  badSignature: () => new ApiError(400, "BAD_SIGNATURE", "La firma no es válida"),
 };

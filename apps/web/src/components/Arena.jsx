@@ -59,7 +59,7 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink }) {
 export function BetCard({ b, now, onOpen, delay = 0 }) {
   const left = b.closeTime - now;
   const closed = b.status !== "open" || left <= 0;
-  const fee = PLATFORM_BPS + b.creatorBps;
+  const fee = b.feeBps ?? PLATFORM_BPS + b.creatorBps; // el server manda el total (10% fijo)
   const hitCol = b.lastHit && now - b.lastHit.t < 1500 ? (b.lastHit.side === 1 ? C.si : C.no) : null;
   return (
     <div onClick={() => onOpen(b.id)} className={"press rise" + (hitCol ? " hit" : "")} style={{

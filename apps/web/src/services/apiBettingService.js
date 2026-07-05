@@ -241,6 +241,17 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     return r.user;
   }, [call]);
 
+  const linkWallet = useCallback(async (address, signature) => {
+    try {
+      const r = await call("/me/wallet", { method: "POST", body: { address, signature } });
+      setMe(r.user);
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ApiFail) return { ok: false, error: e.message };
+      throw e;
+    }
+  }, [call]);
+
   const useReferral = useCallback(async (code) => {
     try {
       const r = await call("/referrals/use", { method: "POST", body: { code } });
@@ -264,7 +275,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   return {
     bets, activity, me, flightsLeft,
     placeBet, createBet, resolve, claim, refund,
-    openByLink, fichaStart, fichaEnd, updateName, useReferral,
+    openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet,
     refreshAll, refreshMe,
     setOnLiveHit: (fn) => { onLiveHitRef.current = fn; },
   };

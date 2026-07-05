@@ -84,7 +84,13 @@ model Bet {
   codeHash     String? // sha256 del código en mayúsculas; NUNCA se expone
   relampago    Boolean   @default(false)
   launch       DateTime  @default(now())
-  deadline     DateTime? // relámpago: cierre + 30 min; sin resultado → anulación
+  deadline     DateTime? // relámpago pts: cierre + 30 min; sin resultado → anulación
+  lockedAt     DateTime? // lockBetting() on-chain: el creador cerró antes de tiempo
+  // --- on-chain (fase 3): los duelos usdc los materializa el INDEXER ---
+  // La cadena es la fuente de verdad: la DB solo refleja. Montos usdc en
+  // MICRO-unidades (Int; tope ~2147 USDC por stake — suficiente en testnet,
+  // migrar a BigInt antes de mainnet).
+  chainAddress String?   @unique // address del contrato Bet en Amoy
   mirrorOfId   Int?      @unique // gemelo pts de un duelo usdc (fase 3)
   mirrorOf     Bet?      @relation("mirror", fields: [mirrorOfId], references: [id])
   mirror       Bet?      @relation("mirror")
@@ -143,6 +149,19 @@ model Referral {
   referred   User      @relation("referred", fields: [referredId], references: [id])
   accredited Boolean   @default(false) // +25 recién con primer acción real (vuelo o apuesta)
   createdAt  DateTime  @default(now())
+}
+
+// Estado del poller de la cadena (una sola fila, id = 1)
+model IndexerState {
+  id        Int    @id @default(1)
+  lastBlock BigInt @default(0)
+}
+
+// Eventos ya procesados (`txHash:logIndex`): si un rango se reprocesa tras un
+// crash, nada se aplica dos veces (los stakes usan increment).
+model ChainEvent {
+  id        String   @id
+  createdAt DateTime @default(now())
 }
 
 model Activity {

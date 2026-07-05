@@ -180,8 +180,30 @@ HECHO:
   14400 verificados on-chain con cast). El primer intento se quedó sin gas a
   mitad (faucets con muros anti-sybil): script/DeployFactory.s.sol existe para
   deployar solo la factory con gas afinado (tip mínimo 25 gwei de Amoy).
-  PENDIENTE fase 3: verificación en Polygonscan (falta ETHERSCAN_API_KEY) →
-  ChainBettingService (wagmi/viem) → indexer + espejo automático de puntos.
+  Ambos contratos VERIFICADOS en Polygonscan Amoy (2026-07-05; la key de
+  Etherscan vive en .env raíz).
+- **FASE 3 cableado (2026-07-05)**: cadena ↔ app conectadas.
+  - ABIs generadas con forge inspect en packages/core/src/abi.ts (+ AMOY.deployBlock).
+  - INDEXER en apps/api (poller viem 5s, RPC dRPC — el oficial limita getLogs):
+    BetCreated materializa el duelo usdc (montos en MICRO-unidades Int, tope
+    testnet ~2147 USDC/stake — migrar a BigInt antes de mainnet) + crea el
+    GEMELO pts si el creador es usuario vinculado; BetPlaced/Claimed → stakes y
+    Activity (ticker late con la cadena); Resolved/Cancelled → estado + ESPEJO
+    automático (systemResolveBet/systemCancelBet, sin chequeos de creador: la
+    cadena es la autoridad). Idempotente vía tabla ChainEvent (txHash:logIndex).
+  - Vincular wallet: POST /me/wallet con FIRMA verificada server-side (viem
+    verifyMessage); mensaje "BARDOOO: vinculo la wallet <addr> a mi cuenta <handle>".
+  - Front: wagmi v3 (injected/MetaMask, solo Amoy) + ChainBettingService: las
+    ESCRITURAS usdc van a la cadena (approve exacto → placeBet, createBet por
+    factory con ms→segundos, resolve/claim/refund) con pasos contados en toasts;
+    las LECTURAS siguen saliendo de la API. WalletSheet real: conectar → firmar
+    vínculo → faucet 500 mUSDC. feeBps viaja del server (fin del hardcodeo).
+  - Duelos PRIVADOS con wallet siguen saliendo solo en puntos (la privacidad es
+    de la app, no del contrato) — backlog.
+  - Endpoints place/resolve/claim/refund rechazan bets usdc (CHAIN_ONLY).
+  - Los apostadores on-chain necesitan POL para gas hasta la fase 4 (gasless).
+  PENDIENTE fase 3: criterio de salida a mano (dos wallets reales, duelo USDC
+  completo, gemelo pts auto-resuelto, montos exactos vs core).
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en
