@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { usePrivy } from "@privy-io/react-auth";
+import { usePrivy, useLoginWithOAuth } from "@privy-io/react-auth";
 import { C } from "./theme";
 import { amt } from "./lib/format";
 import { sfx } from "./lib/sfx";
@@ -274,9 +274,21 @@ export default function App() {
     }
   };
 
-  const connect = async () => {
+  /* OAuth por REDIRECT de página completa (no popup): los popups mueren en la
+     PWA instalada y con bloqueadores — "toco Google y no pasa nada". El hook
+     vive acá (App siempre montado) para completar el login al volver.        */
+  const { initOAuth } = useLoginWithOAuth();
+  const connect = async (method) => {
     try { await sfx.ensure(); } catch (e) {} // el click es el gesto que habilita el audio
-    login();
+    try {
+      if (method === "google" || method === "twitter") {
+        await initOAuth({ provider: method });
+      } else {
+        login(); // email: el modal de Privy no necesita popups
+      }
+    } catch (e) {
+      fire("No se pudo iniciar sesión. Probá entrar con email.", "err");
+    }
   };
 
   /* audio de bienvenida recién cuando la sesión está adentro */
