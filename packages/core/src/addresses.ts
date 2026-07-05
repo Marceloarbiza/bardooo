@@ -12,6 +12,9 @@ export const AMOY = {
   usdc: "0xb5e00AAD4523665636F5465c77D1D506C3A993D8",
   /** BetFactory — crea cada Bet e inyecta el split de comisión según isFlash. */
   betFactory: "0xa93D1967BbB16d219242Dd43Ee94a276f65494e6",
+  /** ERC2771Forwarder (fase 4, gasless). Vacío = gasless deshabilitado.
+   *  Se completa con el redeploy de fase 4 (Deploy.s.sol ya lo incluye). */
+  forwarder: "",
   /** Wallet que deployó (y treasury de testnet). */
   deployer: "0x27E16bEF25fB93E393B8D60C589CA518229C0A0c",
   /** Bloque del deploy de la factory: el indexer arranca desde acá. */

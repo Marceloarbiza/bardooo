@@ -11,6 +11,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {BetFactory, Bet} from "../contracts/P2PBetting.sol";
 import {MockUSDC} from "../contracts/MockUSDC.sol";
+import {ERC2771Forwarder} from "@openzeppelin/contracts/metatx/ERC2771Forwarder.sol";
 
 contract BetTest is Test {
     MockUSDC usdc;
@@ -442,6 +443,92 @@ contract BetTest is Test {
         factory.setFees(200, 800, 100, 900);
         assertEq(factory.platformFeeBps(), 200);
         assertEq(factory.flashCreatorFeeBps(), 900);
+    }
+
+    /*//////////////////// fase 4: permit y gasless ////////////////////*/
+    // La promesa de la fase 4: el usuario FIRMA (permit + meta-tx) y la
+    // plataforma paga el gas. Sin approve on-chain, sin POL en la wallet.
+
+    function _signPermit(
+        uint256 ownerPk, address owner, address spender, uint256 value, uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        bytes32 structHash = keccak256(abi.encode(
+            keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+            owner, spender, value, usdc.nonces(owner), deadline
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", usdc.DOMAIN_SEPARATOR(), structHash));
+        return vm.sign(ownerPk, digest);
+    }
+
+    function test_PlaceBetWithPermit_NoPriorApprove() public {
+        uint256 pk = 0xA11CE;
+        address signer = vm.addr(pk);
+        Bet b = _newFreeBet(false);
+        usdc.mint(signer, 10e6);
+
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk, signer, address(b), 10e6, block.timestamp + 1 hours);
+        vm.prank(signer);
+        b.placeBetWithPermit(SI, 10e6, block.timestamp + 1 hours, v, r, s);
+
+        assertEq(b.stakeOf(signer, SI), 10e6, "aposto sin approve previo");
+        assertEq(usdc.balanceOf(address(b)), 10e6);
+    }
+
+    function test_PlaceBetWithPermit_FrontRunGriefingDoesNotBrick() public {
+        // alguien "gasta" el permit antes que el contrato: como el allowance ya
+        // quedo puesto, el try/catch lo ignora y la apuesta sale igual.
+        uint256 pk = 0xA11CE;
+        address signer = vm.addr(pk);
+        Bet b = _newFreeBet(false);
+        usdc.mint(signer, 10e6);
+
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(pk, signer, address(b), 10e6, block.timestamp + 1 hours);
+        usdc.permit(signer, address(b), 10e6, block.timestamp + 1 hours, v, r, s); // front-run
+
+        vm.prank(signer);
+        b.placeBetWithPermit(SI, 10e6, block.timestamp + 1 hours, v, r, s); // firma ya usada
+        assertEq(b.stakeOf(signer, SI), 10e6);
+    }
+
+    function test_MetaTx_UserSignsPlatformPaysGas() public {
+        // forwarder ERC-2771 + factory que confia en el: el flujo gasless entero
+        ERC2771Forwarder fwd = new ERC2771Forwarder("BardoooForwarder");
+        BetFactory f2 = new BetFactory(
+            address(fwd), address(usdc), treasury,
+            PLATFORM_BPS, CREATOR_BPS, FLASH_PLATFORM_BPS, FLASH_CREATOR_BPS, GRACE
+        );
+        vm.prank(creator);
+        Bet b = Bet(f2.createBet(_cfg(Bet.StakeMode.Free, 0, 0, 0, false)));
+
+        uint256 pk = 0xA11CE;
+        address signer = vm.addr(pk);
+        usdc.mint(signer, 10e6);
+        vm.prank(signer);
+        usdc.approve(address(b), 10e6);
+
+        // la usuaria FIRMA la meta-tx (EIP-712), no manda ninguna transaccion
+        bytes memory data = abi.encodeCall(Bet.placeBet, (SI, 10e6));
+        uint48 deadline = uint48(block.timestamp + 1 hours);
+        bytes32 structHash = keccak256(abi.encode(
+            keccak256("ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,uint48 deadline,bytes data)"),
+            signer, address(b), uint256(0), uint256(500_000), fwd.nonces(signer), deadline, keccak256(data)
+        ));
+        bytes32 domainSep = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes("BardoooForwarder")), keccak256(bytes("1")), block.chainid, address(fwd)
+        ));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, keccak256(abi.encodePacked("\x19\x01", domainSep, structHash)));
+
+        // el RELAYER de la plataforma (dave) ejecuta y paga el gas
+        vm.prank(dave);
+        fwd.execute(ERC2771Forwarder.ForwardRequestData({
+            from: signer, to: address(b), value: 0, gas: 500_000,
+            deadline: deadline, data: data, signature: abi.encodePacked(r, s, v)
+        }));
+
+        // _msgSender() adentro del Bet fue la firmante, no el relayer
+        assertEq(b.stakeOf(signer, SI), 10e6, "la apuesta quedo a nombre de quien firmo");
+        assertEq(b.stakeOf(dave, SI), 0);
     }
 
     /*//////////////////////// fuzz on-chain ////////////////////////*/

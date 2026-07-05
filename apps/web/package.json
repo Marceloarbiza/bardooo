@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@bardooo/core": "workspace:*",
-    "@privy-io/react-auth": "^2.4.3",
+    "@privy-io/react-auth": "^3.33.1",
+    "@privy-io/wagmi": "^4.0.14",
     "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",

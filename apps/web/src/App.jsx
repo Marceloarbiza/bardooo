@@ -60,8 +60,13 @@ export default function App() {
   const points = me?.points ?? 0;
   const profile = { name: me?.name ?? "vos", handle: me?.handle ?? "@vos" };
 
-  /* fase 3: escrituras usdc directo a la cadena; lecturas siguen por la API */
-  const chain = useChainBetting({ me, onStatus: (m) => fire(m) });
+  /* fase 3/4: escrituras usdc a la cadena (gasless si el relayer está prendido);
+     lecturas siguen por la API */
+  const chain = useChainBetting({
+    me,
+    onStatus: (m) => fire(m),
+    gasless: { enabled: svc.gaslessOn, relay: svc.relay, faucetServer: svc.faucetServer },
+  });
   const walletOn = chain.linked;
   const balance = walletOn ? chain.balance : 0;
 

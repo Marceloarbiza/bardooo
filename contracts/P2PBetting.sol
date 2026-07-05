@@ -27,6 +27,7 @@ pragma solidity ^0.8.24;
 //////////////////////////////////////////////////////////////////////////*/
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -235,11 +236,35 @@ contract Bet is ERC2771Context, ReentrancyGuard {
     //////////////////////////////////////////////////////////*/
     /// @dev El usuario debe haber hecho approve(USDC) a este contrato antes.
     function placeBet(uint8 option, uint256 amount) external nonReentrant {
+        _placeBet(_msgSender(), option, amount);
+    }
+
+    /// @notice Apostar con permiso FIRMADO (EIP-2612): sin approve on-chain.
+    ///         El USDC nativo de Polygon soporta permit, igual que este mock.
+    ///         Combinado con meta-tx (ERC-2771), la apuesta entera sale SIN GAS
+    ///         para el usuario: firma permit + firma el ForwardRequest, y la
+    ///         plataforma paga. El try/catch evita el griefing clásico de
+    ///         front-running del permit (si alguien ya lo consumió, el
+    ///         allowance ya quedó puesto y transferFrom funciona igual).
+    function placeBetWithPermit(
+        uint8 option,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external nonReentrant {
+        address user = _msgSender();
+        try IERC20Permit(token).permit(user, address(this), amount, deadline, v, r, s) {} catch {}
+        _placeBet(user, option, amount);
+    }
+
+    function _placeBet(address user, uint8 option, uint256 amount) internal {
         if (status != Status.Open) revert BadState();
         if (block.timestamp >= config.closeTime) revert BettingClosed();
         if (option >= config.numOptions) revert InvalidOption();
         // el creador es el juez: no puede apostar en su propio pozo
-        if (_msgSender() == creator) revert CreatorCannotBet();
+        if (user == creator) revert CreatorCannotBet();
 
         // Validacion segun el modo de monto (la unica diferencia entre los 3 modos)
         if (config.stakeMode == StakeMode.Fixed) {
@@ -247,11 +272,9 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         } else {
             if (amount < config.minStake) revert BelowMin();
             if (config.stakeMode == StakeMode.Capped) {
-                if (stakeOf[_msgSender()][option] + amount > config.maxStake) revert OverCap();
+                if (stakeOf[user][option] + amount > config.maxStake) revert OverCap();
             }
         }
-
-        address user = _msgSender();
 
         // Un usuario queda atado a UN solo lado: si ya tiene stake en otra
         // opcion, no puede apostar a la contraria (si puede sumar a la misma).

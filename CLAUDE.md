@@ -204,6 +204,33 @@ HECHO:
   - Los apostadores on-chain necesitan POL para gas hasta la fase 4 (gasless).
   PENDIENTE fase 3: criterio de salida a mano (dos wallets reales, duelo USDC
   completo, gemelo pts auto-resuelto, montos exactos vs core).
+- **FASE 4 código completo (2026-07-05) — falta el redeploy on-chain**:
+  - Contratos: MockUSDC ahora es ERC20Permit (como el USDC nativo de Polygon);
+    Bet.placeBetWithPermit (apostar sin approve on-chain, con try/catch anti
+    front-running del permit); Deploy.s.sol deploya ERC2771Forwarder
+    ("BardoooForwarder") + factory confiando en él. forge 27/27 (incluye test
+    de meta-tx completa: la usuaria firma, el relayer paga, _msgSender() = ella).
+  - API: POST /relay ejecuta ForwardRequests firmados pagando el gas con
+    RELAYER_PRIVATE_KEY (= deployer; ya seteada en Railway). Candados testeados:
+    destino solo factory/Bets conocidos, selectores permitidos, value 0, gas
+    acotado, rate limit 30/h por usuario. POST /faucet: el server mintea 500
+    mUSDC a tu wallet vinculada (3/h) — cero gas para el usuario.
+    GET /relay/status. Gasless queda APAGADO hasta completar AMOY.forwarder.
+  - Front: Privy v3 + @privy-io/wagmi — la wallet EMBEBIDA (createWallet desde
+    la sesión, sin extensión ni seed) y las externas entran al mismo flujo
+    wagmi. WalletSheet: "Crear mi wallet BARDOOO" (recomendada) o MetaMask →
+    firmar vínculo → faucet. Con relayer prendido, TODO el flujo usdc es por
+    firmas (permit EIP-2612 + ForwardRequest EIP-712) → /relay: cero gas, cero
+    POL, cero vocabulario cripto. Fallback automático a tx directas si está
+    apagado.
+  PARA ACTIVAR FASE 4: (1) faucet ~0.15 POL al deployer; (2) forge script
+  Deploy.s.sol (redeploya TODO: usdc+forwarder+factory); (3) actualizar
+  addresses.ts (usdc/betFactory/forwarder/deployBlock) y resetear IndexerState;
+  (4) verificar contratos; (5) redeploy api+front. OJO: los bets usdc viejos
+  quedan huérfanos (testnet, sin valor). El relayer gasta POL del deployer:
+  mantenerlo fondeado y medir gasto por apuesta (es marketing).
+  NOTA: habilitar "Embedded wallets" en el dashboard de Privy si el
+  createWallet() falla en runtime (config del SDK ya está).
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en

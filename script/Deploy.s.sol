@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/*  Deploy a Polygon Amoy (testnet):
-      forge script script/Deploy.s.sol --rpc-url amoy --broadcast
+/*  Deploy COMPLETO a Polygon Amoy (fase 4: con gasless):
+      forge script script/Deploy.s.sol --rpc-url amoy --broadcast \
+        --priority-gas-price 25gwei --with-gas-price 25100000000 \
+        --gas-estimate-multiplier 110
     Requiere .env con PRIVATE_KEY y TREASURY, y POL de faucet en la wallet.
-    NUNCA usar este script en mainnet: MockUSDC tiene mint abierto.            */
+    Deploya: MockUSDC (con permit) + ERC2771Forwarder + BetFactory confiando
+    en el forwarder. NUNCA usar en mainnet: MockUSDC tiene mint abierto.       */
 
 import {Script, console2} from "forge-std/Script.sol";
+import {ERC2771Forwarder} from "@openzeppelin/contracts/metatx/ERC2771Forwarder.sol";
 import {BetFactory} from "../contracts/P2PBetting.sol";
 import {MockUSDC} from "../contracts/MockUSDC.sol";
 
@@ -25,13 +29,16 @@ contract Deploy is Script {
 
         vm.startBroadcast(pk);
 
-        // 1) USDC de prueba (solo testnet) + saldo inicial para el deployer
+        // 1) USDC de prueba con ERC20Permit (como el USDC nativo de Polygon)
         MockUSDC usdc = new MockUSDC();
-        usdc.mint(deployer, 10_000e6); // 10.000 mUSDC de arranque
+        usdc.mint(deployer, 10_000e6);
 
-        // 2) Factory. Forwarder = address(0) hasta la fase gasless (ERC-2771).
+        // 2) Forwarder ERC-2771: el usuario firma, la plataforma paga el gas
+        ERC2771Forwarder forwarder = new ERC2771Forwarder("BardoooForwarder");
+
+        // 3) Factory que confia en el forwarder (se propaga a cada Bet)
         BetFactory factory = new BetFactory(
-            address(0),
+            address(forwarder),
             address(usdc),
             treasury,
             PLATFORM_FEE_BPS,
@@ -44,7 +51,8 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         console2.log("MockUSDC  :", address(usdc));
+        console2.log("Forwarder :", address(forwarder));
         console2.log("BetFactory:", address(factory));
-        console2.log("-> Copiar ambas direcciones a frontend/src/config.ts");
+        console2.log("-> Actualizar packages/core/src/addresses.ts (+deployBlock) y regenerar ABIs");
     }
 }

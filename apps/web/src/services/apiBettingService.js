@@ -20,6 +20,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   const [activity, setActivity] = useState([]);
   const [me, setMe] = useState(null);
   const [flightsLeft, setFlightsLeft] = useState(0);
+  const [gaslessOn, setGaslessOn] = useState(false);
   const [onLiveHit, setOnLiveHit] = useState(null); // callback para el blip de actividad ajena
 
   const extraBetsRef = useRef(new Map()); // privadas abiertas por link (no vienen en /bets)
@@ -270,10 +271,20 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
       if (c.platformBps !== PLATFORM_BPS)
         console.error(`PLATFORM_BPS desincronizado: front ${PLATFORM_BPS} vs server ${c.platformBps}`);
     }).catch(() => {});
+    apiFetch("/relay/status").then((r) => setGaslessOn(!!r.enabled)).catch(() => {});
   }, [enabled]);
 
+  /* ---- fase 4: gasless — el server paga el gas ---- */
+  const relay = useCallback(async (request) => {
+    return await call("/relay", { method: "POST", body: request });
+  }, [call]);
+
+  const faucetServer = useCallback(async (address) => {
+    return await call("/faucet", { method: "POST", body: { address } });
+  }, [call]);
+
   return {
-    bets, activity, me, flightsLeft,
+    bets, activity, me, flightsLeft, gaslessOn, relay, faucetServer,
     placeBet, createBet, resolve, claim, refund,
     openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet,
     refreshAll, refreshMe,

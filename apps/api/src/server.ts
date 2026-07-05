@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
 import { getAddress, verifyMessage } from "viem";
+import { relayEnabled, relayExecute, faucetMint } from "./relay";
 import { prisma } from "./db";
 import { ApiError, errors } from "./errors";
 import type { TokenVerifier } from "./auth";
@@ -211,6 +212,37 @@ export async function buildServer(opts: ServerOpts) {
     const user = requireUser(req);
     const { flightId, score } = z.object({ flightId: z.string(), score: z.number() }).parse(req.body);
     return await endFlight(user.id, flightId, score);
+  });
+
+  /* --------------------- gasless (fase 4): relay + faucet --------------------- */
+
+  // el front pregunta si el modo sin gas está prendido
+  app.get("/relay/status", async () => ({ enabled: relayEnabled() }));
+
+  // meta-transacción firmada → la plataforma paga el gas (candados en relay.ts)
+  app.post("/relay", { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } }, async (req) => {
+    requireUser(req); // solo usuarios logueados gastan nuestro gas
+    const body = z.object({
+      from: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+      to: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+      value: z.string().default("0"),
+      gas: z.string(),
+      deadline: z.number().int(),
+      data: z.string(),
+      signature: z.string(),
+    }).parse(req.body);
+    return await relayExecute(body);
+  });
+
+  // faucet de testnet sin gas: la plataforma mintea los 500 mUSDC
+  app.post("/faucet", { config: { rateLimit: { max: 3, timeWindow: "1 hour" } } }, async (req) => {
+    const user = requireUser(req);
+    const { address } = z.object({ address: z.string().regex(/^0x[0-9a-fA-F]{40}$/) }).parse(req.body);
+    // solo a tu propia wallet vinculada: nadie farmea mints para terceros
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    if (!me.walletAddr || me.walletAddr.toLowerCase() !== address.toLowerCase())
+      throw errors.badSignature();
+    return await faucetMint(address);
   });
 
   /* ------------------------------ referidos ------------------------------ */
