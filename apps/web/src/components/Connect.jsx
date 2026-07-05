@@ -48,23 +48,25 @@ export function Connect({ onConnect, now }) {
         }}>
           <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 17 }}>G</span> Continuar con Google
         </button>
+        {/* wallet al mismo nivel que Google: el público también es cripto */}
+        <button onClick={() => onConnect("wallet")} className="press" style={{
+          width: "100%", border: "none", borderRadius: 18, padding: "18px", marginTop: 10,
+          fontFamily: "Syne", fontWeight: 800, fontSize: 17, color: C.bg, cursor: "pointer",
+          background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 10px 30px ${C.gold}33`,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+        }}>
+          <Wallet size={18} /> Entrar con wallet
+        </button>
         <button onClick={() => onConnect("email")} className="press" style={{
           width: "100%", borderRadius: 18, padding: "16px", marginTop: 10, cursor: "pointer",
           fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.text,
           background: "transparent", border: `1.5px solid ${C.line}`,
         }}>Entrar con email</button>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={() => onConnect("twitter")} className="press" style={{
-            ...ghost, flex: 1, justifyContent: "center", fontSize: 13,
-          }}>
-            Continuar con X
-          </button>
-          <button onClick={() => onConnect("wallet")} className="press" style={{
-            ...ghost, flex: 1, justifyContent: "center", fontSize: 13,
-          }}>
-            <Wallet size={15} /> Entrar con wallet
-          </button>
-        </div>
+        <button onClick={() => onConnect("twitter")} className="press" style={{
+          ...ghost, width: "100%", justifyContent: "center", marginTop: 12, fontSize: 13,
+        }}>
+          Continuar con X (Twitter)
+        </button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, color: C.faint, fontSize: 12 }}>
           <ShieldCheck size={14} /> Jugás gratis con puntos · la wallet, cuando vos quieras
         </div>
