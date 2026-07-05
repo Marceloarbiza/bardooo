@@ -11,3 +11,5 @@ dist/
 # claude local
 .claude/settings.local.json
 .claude/tsc-cache/
+.vercel
+.env*

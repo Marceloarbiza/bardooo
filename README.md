@@ -54,6 +54,16 @@ forge script script/Deploy.s.sol --rpc-url amoy --broadcast
 - `frontend/BardoApp.jsx` — el prototipo original en un solo archivo (REFERENCIA
   histórica: ya está migrado a `apps/web`, no editar acá).
 
+## Deploy (fase puntos)
+
+- **API → Railway** (`railway.json` en la raíz): servicio Node + plugin Postgres.
+  Variables: `BARDOOO_DATABASE_URL` (referencia al Postgres del proyecto),
+  `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `CORS_ORIGIN` (URL del front).
+  El start corre `prisma db push` (idempotente) antes de levantar.
+- **Front → Vercel** (`vercel.json` en la raíz, deploy desde la raíz del repo):
+  variables `VITE_PRIVY_APP_ID` y `VITE_API_URL` (URL pública de la API).
+- **Privy**: agregar el dominio del front a los allowed origins de la app.
+
 ## Seguridad
 
 Código NO auditado. Solo testnet. Antes de cualquier mainnet con dinero real:

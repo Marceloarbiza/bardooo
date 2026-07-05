@@ -142,8 +142,16 @@ HECHO:
   también acepta links /i/{codigo}), privadas por /unlock. Wallet = sheet "pronto".
   El código de una privada propia se recuerda en memoria local para compartir
   (el server no lo devuelve NUNCA); tras recargar, la tarjeta muestra solo link.
-  PENDIENTE fase 2: prueba de fuego de dos navegadores (dueño) y deploy
-  (Vercel front + Railway/Render api).
+  Prueba de fuego de dos navegadores verificada por el dueño el 2026-07-05.
+- **DEPLOY (2026-07-05) — FASE 2 COMPLETA, en producción**:
+  - Front: https://bardooo.vercel.app (Vercel, proyecto `bardooo`, deploy desde la
+    raíz del repo con vercel.json; envs VITE_PRIVY_APP_ID + VITE_API_URL).
+  - API: https://api-production-18b7.up.railway.app (Railway, proyecto `bardooo`,
+    servicio `api` + Postgres del mismo proyecto; railway.json en la raíz; el
+    start corre `prisma db push` idempotente; envs BARDOOO_DATABASE_URL (referencia
+    ${{Postgres.DATABASE_URL}}), PRIVY_APP_ID/SECRET, CORS_ORIGIN=front).
+  - Deploy manual por CLI (`railway up` / `vercel deploy --prod`); conectar los
+    deploys automáticos por git es mejora pendiente.
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en
