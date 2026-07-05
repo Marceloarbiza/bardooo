@@ -39,7 +39,12 @@ export async function buildServer(opts: ServerOpts) {
       return reply.status(400).send({ error: "BAD_REQUEST", message: "Datos inválidos" });
     if ((err as any).statusCode === 429)
       return reply.status(429).send({ error: "RATE_LIMIT", message: "Demasiados intentos, esperá un toque" });
-    app.log.error(err);
+    // errores 4xx del propio Fastify (ej. body JSON vacío/malformado): NO son
+    // nuestros 500 — devolver su status real en vez de "algo se rompió"
+    const sc = (err as any).statusCode;
+    if (typeof sc === "number" && sc >= 400 && sc < 500)
+      return reply.status(sc).send({ error: "BAD_REQUEST", message: "Pedido inválido" });
+    console.error("500:", err); // logger está apagado: que al menos quede en stdout
     return reply.status(500).send({ error: "INTERNAL", message: "Algo se rompió de nuestro lado" });
   });
 

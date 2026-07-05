@@ -13,7 +13,10 @@ export class ApiFail extends Error {
 }
 
 export async function apiFetch(path, { method = "GET", body, token, nameHint } = {}) {
-  const headers = { "content-type": "application/json" };
+  const headers = {};
+  // content-type SOLO si hay body: mandarlo con body vacío hace que Fastify
+  // intente parsear JSON de la nada y reviente (bug real de producción)
+  if (body !== undefined) headers["content-type"] = "application/json";
   if (token) headers.authorization = `Bearer ${token}`;
   if (nameHint) headers["x-name-hint"] = encodeURIComponent(nameHint).slice(0, 120);
 
