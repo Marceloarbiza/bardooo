@@ -43,16 +43,25 @@ contract BetFactory is ERC2771Context {
     address public immutable token;         // USDC en Polygon
     address public owner;                   // admin de la plataforma
     address public treasury;                // recibe la comision de la plataforma
-    uint16  public platformFeeBps;          // ej. 300 = 3%
-    uint16  public maxCreatorFeeBps;        // techo del creador, ej. 1000 = 10%
-    uint64  public gracePeriod;             // seg. tras resolveTime para habilitar devolucion (ej. 48h = 172800)
+
+    // Comisiones FIJAS para el usuario (decision del dueño 2026-07-05): el
+    // creador NO elige su fee. Ajustables por plataforma como dial de
+    // crecimiento, con dos candados: el TOTAL que sale del pozo es identico
+    // en normal y relampago (regla inviolable), y nunca supera el 20%.
+    uint16  public platformFeeBps;          // normal: 300 (3%)
+    uint16  public creatorFeeBps;           // normal: 700 (7%)
+    uint16  public flashPlatformFeeBps;     // relampago: 100 (1%)
+    uint16  public flashCreatorFeeBps;      // relampago: 900 (9%)
+    uint64  public gracePeriod;             // seg. tras resolveTime para habilitar devolucion (4h = 14400)
 
     address[] public allBets;
 
-    event BetCreated(address indexed bet, address indexed creator, string description);
+    event BetCreated(address indexed bet, address indexed creator, bool isFlash, string description);
+    event FeesUpdated(uint16 platformBps, uint16 creatorBps, uint16 flashPlatformBps, uint16 flashCreatorBps);
 
     error NotOwner();
-    error CreatorFeeTooHigh();
+    error FeeTotalsMismatch(); // total normal != total flash: romperia la confianza del apostador
+    error FeeTooHigh();        // techo duro de plataforma: 20% total
 
     modifier onlyOwner() {
         if (_msgSender() != owner) revert NotOwner();
@@ -64,33 +73,48 @@ contract BetFactory is ERC2771Context {
         address _token,
         address _treasury,
         uint16  _platformFeeBps,
-        uint16  _maxCreatorFeeBps,
+        uint16  _creatorFeeBps,
+        uint16  _flashPlatformFeeBps,
+        uint16  _flashCreatorFeeBps,
         uint64  _gracePeriod
     ) ERC2771Context(_forwarder) {
-        forwarder        = _forwarder;
-        token            = _token;
-        treasury         = _treasury;
-        owner            = _msgSender();
-        platformFeeBps   = _platformFeeBps;
-        maxCreatorFeeBps = _maxCreatorFeeBps;
-        gracePeriod      = _gracePeriod;
+        forwarder = _forwarder;
+        token     = _token;
+        treasury  = _treasury;
+        owner     = _msgSender();
+        _setFees(_platformFeeBps, _creatorFeeBps, _flashPlatformFeeBps, _flashCreatorFeeBps);
+        gracePeriod = _gracePeriod;
+    }
+
+    function _setFees(uint16 p, uint16 c, uint16 fp, uint16 fc) internal {
+        if (uint256(p) + c != uint256(fp) + fc) revert FeeTotalsMismatch();
+        if (uint256(p) + c > 2000) revert FeeTooHigh();
+        platformFeeBps      = p;
+        creatorFeeBps       = c;
+        flashPlatformFeeBps = fp;
+        flashCreatorFeeBps  = fc;
+        emit FeesUpdated(p, c, fp, fc);
     }
 
     /// @notice Crea una nueva apuesta. Para binario, cfg.numOptions = 2.
+    ///         El split de comision lo inyecta la factory segun cfg.isFlash.
     function createBet(Bet.Config calldata cfg) external returns (address) {
-        if (cfg.creatorFeeBps > maxCreatorFeeBps) revert CreatorFeeTooHigh();
+        (uint16 p, uint16 c) = cfg.isFlash
+            ? (flashPlatformFeeBps, flashCreatorFeeBps)
+            : (platformFeeBps, creatorFeeBps);
 
         Bet bet = new Bet(
             forwarder,
             token,
             treasury,
-            platformFeeBps,
+            p,
+            c,
             gracePeriod,      // periodo de gracia fijado por la plataforma
             _msgSender(),     // creador real, incluso via meta-tx
             cfg
         );
         allBets.push(address(bet));
-        emit BetCreated(address(bet), _msgSender(), cfg.description);
+        emit BetCreated(address(bet), _msgSender(), cfg.isFlash, cfg.description);
         return address(bet);
     }
 
@@ -100,8 +124,7 @@ contract BetFactory is ERC2771Context {
 
     // --- admin ---
     function setTreasury(address t) external onlyOwner { treasury = t; }
-    function setPlatformFee(uint16 bps) external onlyOwner { platformFeeBps = bps; }
-    function setMaxCreatorFee(uint16 bps) external onlyOwner { maxCreatorFeeBps = bps; }
+    function setFees(uint16 p, uint16 c, uint16 fp, uint16 fc) external onlyOwner { _setFees(p, c, fp, fc); }
     function setGracePeriod(uint64 secs) external onlyOwner { gracePeriod = secs; }
     function transferOwnership(address n) external onlyOwner { owner = n; }
 
@@ -131,14 +154,15 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         uint256   maxBettors;     // 0 = sin limite; >0 = tope TOTAL de apostadores
         uint64    closeTime;      // cierre de apuestas (5 min antes del evento)
         uint64    resolveTime;    // a partir de cuando el creador puede resolver
-        uint16    creatorFeeBps;  // comision del creador (la factory ya valido <= techo)
+        bool      isFlash;        // relampago: cambia el SPLIT de la comision (nunca el total)
     }
 
     // --- inmutables / plataforma ---
     address public immutable token;
     address public immutable treasury;
     address public immutable creator;
-    uint16  public immutable platformFeeBps;
+    uint16  public immutable platformFeeBps; // share de plataforma (300 normal / 100 flash)
+    uint16  public immutable creatorFeeBps;  // share del creador (700 normal / 900 flash)
     uint64  public immutable gracePeriod;   // fijado por la plataforma (BetFactory)
 
     // --- config ---
@@ -167,6 +191,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
 
     // --- errores ---
     error NotCreator();
+    error CreatorCannotBet(); // conflicto de interes directo: el juez no apuesta
     error BadState();
     error BettingClosed();
     error InvalidOption();
@@ -184,6 +209,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         address _token,
         address _treasury,
         uint16  _platformFeeBps,
+        uint16  _creatorFeeBps,
         uint64  _gracePeriod,
         address _creator,
         Config memory cfg
@@ -198,6 +224,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         treasury       = _treasury;
         creator        = _creator;
         platformFeeBps = _platformFeeBps;
+        creatorFeeBps  = _creatorFeeBps;
         gracePeriod    = _gracePeriod;
         config         = cfg;
         status         = Status.Open;
@@ -211,6 +238,8 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         if (status != Status.Open) revert BadState();
         if (block.timestamp >= config.closeTime) revert BettingClosed();
         if (option >= config.numOptions) revert InvalidOption();
+        // el creador es el juez: no puede apostar en su propio pozo
+        if (_msgSender() == creator) revert CreatorCannotBet();
 
         // Validacion segun el modo de monto (la unica diferencia entre los 3 modos)
         if (config.stakeMode == StakeMode.Fixed) {
@@ -271,6 +300,15 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         winningOption = option;
         status = Status.Resolved;
         emit Resolved(option);
+    }
+
+    /// @notice El creador cierra las apuestas antes de tiempo (ej. arranco el evento).
+    ///         No adelanta la resolucion: resolveTime sigue mandando.
+    function lockBetting() external {
+        if (_msgSender() != creator) revert NotCreator();
+        if (status != Status.Open) revert BadState();
+        status = Status.Locked;
+        emit LockedEvent();
     }
 
     /// @notice Empate / evento cancelado: el creador anula y todos recuperan su stake, sin comision.
@@ -341,7 +379,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         if (commission == 0) return;
 
         // Reparto proporcional del tope entre plataforma y creador (segun sus bps).
-        uint256 totalBps    = uint256(platformFeeBps) + config.creatorFeeBps;
+        uint256 totalBps    = uint256(platformFeeBps) + creatorFeeBps;
         uint256 platformCut = Math.mulDiv(commission, platformFeeBps, totalBps);
         uint256 creatorCut  = commission - platformCut;
 
@@ -355,7 +393,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
     //////////////////////////////////////////////////////////*/
     /// @notice Comision total: bps sobre el total, TOPEADA al pozo perdedor.
     function totalCommission() public view returns (uint256) {
-        uint256 gross  = Math.mulDiv(totalPool, uint256(platformFeeBps) + config.creatorFeeBps, 10000);
+        uint256 gross  = Math.mulDiv(totalPool, uint256(platformFeeBps) + creatorFeeBps, 10000);
         uint256 losing = totalPool - poolByOption[winningOption];
         return gross > losing ? losing : gross;
     }

@@ -1,7 +1,6 @@
 .env
 out/
 cache/
-lib/
 node_modules/
 broadcast/
 dist/

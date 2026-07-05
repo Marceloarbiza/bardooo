@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
-import { C, CLOSE_OFFSET_MIN, MAX_CREATOR_BPS, PLATFORM_BPS } from "../theme";
+import { C, CLOSE_OFFSET_MIN } from "../theme";
 import { fmtDateTime, toLocalInput } from "../lib/format";
 import { DateField, Label, NumField, Row, Seg } from "./ui/bits";
 import { ghost } from "./ui/styles";
@@ -22,7 +22,6 @@ export function Create({ onCreate, onBack, walletOn }) {
   const [maxStake, setMaxStake] = useState(50);
   const [minStake, setMinStake] = useState(5);
   const [maxBettors, setMaxBettors] = useState(0);
-  const [creatorBps, setCreatorBps] = useState(700);
 
   const defaultStart = toLocalInput(new Date(Date.now() + 60 * 60000));
   const [timeMode, setTimeMode] = useState("guided"); // guided | manual
@@ -46,7 +45,7 @@ export function Create({ onCreate, onBack, walletOn }) {
   const submit = () => valid && onCreate({
     question: question.trim(), stakeMode, fixedAmount: Number(fixedAmount),
     maxStake: Number(maxStake), minStake: Number(minStake),
-    maxBettors: Number(maxBettors), creatorBps, isPrivate, code: isPrivate ? code.trim() : "",
+    maxBettors: Number(maxBettors), isPrivate, code: isPrivate ? code.trim() : "",
     closeTime, resolveTime,
   });
 
@@ -143,13 +142,17 @@ export function Create({ onCreate, onBack, walletOn }) {
         )}
       </div>
 
-      <Label>Tu comisión de creador: {(creatorBps / 100).toFixed(1)}%</Label>
-      <input type="range" min={0} max={MAX_CREATOR_BPS} step={50} value={creatorBps}
-        onChange={(e) => setCreatorBps(Number(e.target.value))}
-        style={{ width: "100%", accentColor: C.gold, marginBottom: 6 }} />
-      <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 20px", lineHeight: 1.5 }}>
-        Máximo {MAX_CREATOR_BPS / 100}%. La plataforma suma {PLATFORM_BPS / 100}% aparte. La comisión sale del pozo y nunca hace que un ganador cobre menos de lo que puso.
-      </p>
+      <div style={{
+        background: `linear-gradient(160deg, ${C.gold}10, ${C.bg2})`,
+        border: `1px solid ${C.gold}33`, borderRadius: 14, padding: "13px 16px", marginBottom: 20,
+      }}>
+        <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 3 }}>
+          Tu comisión: <span style={{ color: C.gold }}>7%</span> del pozo
+        </div>
+        <div style={{ color: C.faint, fontSize: 11.5, lineHeight: 1.5 }}>
+          Comisión total fija del 10% (7% vos + 3% BARDOOO). Sale del pozo y nunca hace que un ganador cobre menos de lo que puso. En relámpagos tu parte sube al 9%.
+        </div>
+      </div>
 
       <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 12px", lineHeight: 1.5, textAlign: "center" }}>
         {walletOn ? "Sale en USDC y también en puntos, para que juegue toda tu audiencia." : "Se juega con puntos. Activá tu wallet para lanzar también en USDC."}

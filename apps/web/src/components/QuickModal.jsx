@@ -21,7 +21,7 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn }) {
     onCreate({
       question: question.trim(), stakeMode, fixedAmount: Number(fixedAmount),
       maxStake: 0, minStake: stakeMode === "fixed" ? Number(fixedAmount) : 5,
-      maxBettors: 0, creatorBps: 700, isPrivate, code: isPrivate ? code.trim() : "",
+      maxBettors: 0, isPrivate, code: isPrivate ? code.trim() : "",
       relampago: true, windowMin,
     });
   };
@@ -81,7 +81,7 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn }) {
           steps={[-5, 5]} min={5} max={60} onChange={setWindowMin} />
 
         <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 14px", lineHeight: 1.5 }}>
-          Se lanza ya{walletOn ? " en USDC y en puntos" : " en puntos"} · cierra en {windowMin} min · tenés 30 min más para cargar el resultado o se anula · tu comisión 7% <b style={{ color: C.gold }}>+2% bonus</b> (BARDOOO cobra solo 1%).
+          Se lanza ya{walletOn ? " en USDC y en puntos" : " en puntos"} · cierra en {windowMin} min · tenés 30 min más para cargar el resultado o se anula · tu comisión <b style={{ color: C.gold }}>9%</b> (BARDOOO cobra solo 1%).
         </p>
 
         <button onClick={submit} disabled={!valid} className="press" style={{

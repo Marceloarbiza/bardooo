@@ -100,8 +100,20 @@ Comandos de la app: `pnpm install`, `pnpm dev` (levanta apps/web), `pnpm test`
     tenga pozo > 0 (con N>2 puede ganar una opción vacía → división por cero).
 
 ### Parámetros de referencia
-- `platformFeeBps = 300` (3%), `maxCreatorFeeBps = 1000` (10%),
-  `gracePeriod = 172800` (48 h), `minStake` típico `5e6` (5 USDC).
+- `platformFeeBps = 300` (3%), `gracePeriod = 14400` (4 h), `minStake` típico
+  `5e6` (5 USDC).
+
+### DECISIONES DEL DUEÑO (2026-07-05, fase 3) — reemplazan lo anterior
+1. **Comisiones FIJAS, sin slider del creador**: normal = 3% plataforma + 7%
+   creador; relámpago = 1% plataforma + 9% creador. Total al apostador SIEMPRE
+   10% (regla inviolable, ahora con require en el contrato). Los cuatro bps son
+   parámetros de plataforma (setters onlyOwner en la factory) — fijos para el
+   usuario, ajustables como dial de crecimiento sin redeploy. `maxCreatorFeeBps`
+   y `creatorFeeBps` del Config quedan OBSOLETOS; el Config gana `isFlash`.
+2. **Grace period global corto: 4 h** (era 48 h). Vale para todas las apuestas;
+   resolveTime ya codifica el fin del evento. El deadline duro de 30 min de los
+   relámpagos lo sigue manejando el backend/indexer (la válvula on-chain de 4 h
+   es el respaldo trustless).
 
 ## Estado actual (qué está hecho y qué falta)
 
@@ -152,6 +164,24 @@ HECHO:
     ${{Postgres.DATABASE_URL}}), PRIVY_APP_ID/SECRET, CORS_ORIGIN=front).
   - Deploy manual por CLI (`railway up` / `vercel deploy --prod`); conectar los
     deploys automáticos por git es mejora pendiente.
+- **FASE 3 contrato (2026-07-05)**: backlog crítico implementado y `forge test`
+  24/24 en verde (Foundry 1.7.1 instalado, deps en lib/): comisiones fijas con
+  invariante on-chain (FeeTotalsMismatch si normal≠flash; techo 20%), Config con
+  `isFlash` (la factory inyecta el split 300/700 ó 100/900), el creador NO puede
+  apostar en su pozo (CreatorCannotBet), `lockBetting()` del creador (cierra
+  apuestas sin adelantar resolveTime), grace 4 h. Backend y front alineados al
+  modelo fijo (slider eliminado; creatorBps deprecado e ignorado en la API;
+  /config expone los 4 bps). Wallet de deployer Amoy generada
+  (0x27E16bEF25fB93E393B8D60C589CA518229C0A0c, clave en .env raíz, SOLO testnet;
+  treasury testnet = deployer).
+- **DEPLOY AMOY (2026-07-05)** — direcciones en `packages/core/src/addresses.ts`:
+  MockUSDC `0xb5e00AAD4523665636F5465c77D1D506C3A993D8`, BetFactory
+  `0xa93D1967BbB16d219242Dd43Ee94a276f65494e6` (fees 300/700 y 100/900, grace
+  14400 verificados on-chain con cast). El primer intento se quedó sin gas a
+  mitad (faucets con muros anti-sybil): script/DeployFactory.s.sol existe para
+  deployar solo la factory con gas afinado (tip mínimo 25 gwei de Amoy).
+  PENDIENTE fase 3: verificación en Polygonscan (falta ETHERSCAN_API_KEY) →
+  ChainBettingService (wagmi/viem) → indexer + espejo automático de puntos.
   OJO ENTORNO LOCAL: la env var se llama BARDOOO_DATABASE_URL (no DATABASE_URL)
   porque el shell de la máquina exporta un DATABASE_URL global de otra infra.
   Tests de api corren contra bardooo_test (fijado en vitest.config.ts, NUNCA en

@@ -11,7 +11,7 @@ import {
 } from "./services/bets";
 import { startFlight, endFlight, flightsLeft } from "./services/ficha";
 import { useReferralCode } from "./services/referrals";
-import { PLATFORM_BPS, FLASH_REBATE_BPS, MAX_CREATOR_BPS } from "./settlement";
+import { PLATFORM_BPS, CREATOR_BPS, FLASH_PLATFORM_BPS, FLASH_CREATOR_BPS, FLASH_REBATE_BPS } from "./settlement";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -67,10 +67,13 @@ export async function buildServer(opts: ServerOpts) {
   app.get("/health", async () => ({ ok: true }));
 
   // el front lee esto en vez de hardcodear PLATFORM_BPS (trampa conocida de CLAUDE.md)
+  // comisiones FIJAS (2026-07-05): normal 3+7, relámpago 1+9 — total SIEMPRE 10%
   app.get("/config", async () => ({
     platformBps: PLATFORM_BPS,
+    creatorBps: CREATOR_BPS,
+    flashPlatformBps: FLASH_PLATFORM_BPS,
+    flashCreatorBps: FLASH_CREATOR_BPS,
     flashRebateBps: FLASH_REBATE_BPS,
-    maxCreatorBps: MAX_CREATOR_BPS,
   }));
 
   app.get("/bets", async (req) => ({ bets: await listPublicBets(req.user?.id) }));
@@ -126,7 +129,7 @@ export async function buildServer(opts: ServerOpts) {
     minStake: z.number().optional(),
     maxStake: z.number().optional(),
     maxBettors: z.number().optional(),
-    creatorBps: z.number().int(),
+    creatorBps: z.number().int().optional(), // DEPRECADO: se ignora (comisión fija)
     isPrivate: z.boolean().optional(),
     code: z.string().max(12).optional(),
     closeTime: z.number().optional(),

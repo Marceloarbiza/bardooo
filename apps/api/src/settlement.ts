@@ -8,9 +8,15 @@
 
 import { commission, payoutFor, feeSplit } from "@bardooo/core";
 
-export const PLATFORM_BPS = 300; // 3% — en fase 3 se lee de factory.platformFeeBps()
-export const FLASH_REBATE_BPS = 200; // relámpago: BARDOOO cede 2pp al creador (cobra 1%)
-export const MAX_CREATOR_BPS = 1000; // techo 10%
+/*  Comisiones FIJAS (decisión del dueño 2026-07-05), sin slider del creador:
+    normal = 3% plataforma + 7% creador; relámpago = 1% + 9%. Total al
+    apostador SIEMPRE 10%. Espejo de BetFactory (fase 3 las lee de la factory). */
+export const PLATFORM_BPS = 300;
+export const CREATOR_BPS = 700;
+export const FLASH_REBATE_BPS = 200; // en flash la plataforma cede 2pp: share efectivo 100
+export const FLASH_PLATFORM_BPS = PLATFORM_BPS - FLASH_REBATE_BPS; // 100
+export const FLASH_CREATOR_BPS = CREATOR_BPS + FLASH_REBATE_BPS; // 900
+export const MAX_CREATOR_BPS = 1000; // techo legado (ya no hay input del creador)
 
 export interface StakeIn {
   userId: string;

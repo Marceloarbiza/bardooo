@@ -11,9 +11,12 @@ import {BetFactory} from "../contracts/P2PBetting.sol";
 import {MockUSDC} from "../contracts/MockUSDC.sol";
 
 contract Deploy is Script {
-    uint16 constant PLATFORM_FEE_BPS    = 300;      // 3%
-    uint16 constant MAX_CREATOR_FEE_BPS = 1000;     // 10%
-    uint64 constant GRACE_PERIOD        = 48 hours; // 172800 s
+    // Comisiones FIJAS (decision del dueño 2026-07-05): total SIEMPRE 10%.
+    uint16 constant PLATFORM_FEE_BPS       = 300; // normal: 3% plataforma
+    uint16 constant CREATOR_FEE_BPS        = 700; // normal: 7% creador
+    uint16 constant FLASH_PLATFORM_FEE_BPS = 100; // relampago: 1% plataforma
+    uint16 constant FLASH_CREATOR_FEE_BPS  = 900; // relampago: 9% creador
+    uint64 constant GRACE_PERIOD           = 4 hours; // valvula global corta
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
@@ -32,7 +35,9 @@ contract Deploy is Script {
             address(usdc),
             treasury,
             PLATFORM_FEE_BPS,
-            MAX_CREATOR_FEE_BPS,
+            CREATOR_FEE_BPS,
+            FLASH_PLATFORM_FEE_BPS,
+            FLASH_CREATOR_FEE_BPS,
             GRACE_PERIOD
         );
 

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma, type Tx } from "../db";
 import { ApiError, errors } from "../errors";
-import { computeResolution, computeClaimPayout, PLATFORM_BPS, MAX_CREATOR_BPS } from "../settlement";
+import { computeResolution, computeClaimPayout, PLATFORM_BPS, CREATOR_BPS } from "../settlement";
 import { accreditIfPending } from "./referrals";
 
 /*  Reglas duras que este servicio hace cumplir EN EL SERVER (el cliente jamás
@@ -113,7 +113,7 @@ export interface CreateBetInput {
   minStake?: number;
   maxStake?: number;
   maxBettors?: number;
-  creatorBps: number;
+  creatorBps?: number; // DEPRECADO: se ignora — la comisión es fija (7% / 9% flash)
   isPrivate?: boolean;
   code?: string;
   // modo completo (ms epoch):
@@ -129,8 +129,8 @@ export async function createBet(userId: string, input: CreateBetInput) {
   if (q.length < 7 || q.length > MAX_QUESTION)
     throw new ApiError(400, "BAD_QUESTION", "La pregunta tiene que tener entre 7 y 200 caracteres");
   if (input.currency === "usdc") throw errors.usdcSoon(); // fase 3
-  if (input.creatorBps < 0 || input.creatorBps > MAX_CREATOR_BPS)
-    throw new ApiError(400, "BAD_FEE", `La comisión del creador va de 0 a ${MAX_CREATOR_BPS / 100}%`);
+  // comisión FIJA: el cliente no la elige (decisión del dueño 2026-07-05);
+  // el split flash (1/9) lo aplica la liquidación según bet.relampago
 
   const minStake = Math.max(1, Math.trunc(input.minStake ?? 5));
   let fixedAmount: number | null = null;
@@ -177,7 +177,7 @@ export async function createBet(userId: string, input: CreateBetInput) {
       minStake,
       maxStake,
       maxBettors: Math.max(0, Math.trunc(input.maxBettors ?? 0)),
-      creatorBps: Math.trunc(input.creatorBps),
+      creatorBps: CREATOR_BPS, // fijo: 7% (el bonus flash lo aplica el split al resolver)
       closeTime: new Date(closeTime),
       resolveTime: new Date(resolveTime),
       isPrivate,
