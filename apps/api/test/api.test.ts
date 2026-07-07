@@ -101,6 +101,12 @@ describe("flujo completo con los números sagrados (pareja 20/50 vs 60, fee 10%)
     expect(r.body.bet.bettors).toBe(3);
   });
 
+  it("el creador no puede apostar en su propio pozo (paridad con el contrato)", async () => {
+    const r = await api("POST", `/bets/${betId}/place`, "diego", { option: 1, amount: 5 });
+    expect(r.status).toBe(409);
+    expect(r.body.error).toBe("CREATOR_CANNOT_BET");
+  });
+
   it("regla de un solo lado: alice no puede ir al NO", async () => {
     const r = await api("POST", `/bets/${betId}/place`, "alice", { option: 0, amount: 5 });
     expect(r.status).toBe(409);

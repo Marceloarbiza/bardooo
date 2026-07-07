@@ -222,6 +222,8 @@ export async function placeBet(userId: string, betId: number, option: number, am
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b) throw errors.notFound();
     if (b.currency === "usdc") throw errors.chainOnly(); // se apuesta desde la wallet, no por API
+    // misma regla que el contrato: el juez no apuesta en su propio pozo
+    if (b.creatorId === userId) throw errors.creatorCannotBet();
     const now = Date.now();
 
     // estado y ventana (validación de SERVER, como el contrato)

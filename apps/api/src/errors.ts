@@ -35,6 +35,7 @@ export const errors = {
   badReferral: () => new ApiError(400, "BAD_REFERRAL", "Ese código de invitación no sirve"),
   unauthorized: () => new ApiError(401, "UNAUTHORIZED", "Iniciá sesión para hacer eso"),
   chainOnly: () => new ApiError(400, "CHAIN_ONLY", "Este duelo vive en la cadena: se juega desde tu wallet"),
+  creatorCannotBet: () => new ApiError(409, "CREATOR_CANNOT_BET", "Sos el juez de este duelo: no podés apostar en tu propio pozo"),
   walletTaken: () => new ApiError(409, "WALLET_TAKEN", "Esa wallet ya está vinculada a otra cuenta"),
   badSignature: () => new ApiError(400, "BAD_SIGNATURE", "La firma no es válida"),
 };

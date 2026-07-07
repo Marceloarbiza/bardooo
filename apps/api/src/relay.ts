@@ -1,4 +1,4 @@
-import { createWalletClient, createPublicClient, http, getAddress, slice, defineChain } from "viem";
+import { createWalletClient, createPublicClient, http, getAddress, slice, concat, defineChain, decodeErrorResult } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { AMOY, FORWARDER_ABI, MOCK_USDC_ABI, BET_FACTORY_ABI, BET_ABI } from "@bardooo/core";
 import { toFunctionSelector } from "viem";
@@ -76,6 +76,66 @@ export async function validateRelayRequest(req: ForwardRequestIn) {
     throw new ApiError(400, "RELAY_FN", "Esa función no se relayea");
 }
 
+/* Traducción de los reverts del contrato a mensajes humanos: sin esto, el
+   forwarder responde FailedCall() pelado y el usuario ve un 500 críptico
+   (pasó en producción: el creador apostando en su propio pozo).            */
+const FRIENDLY_REVERTS: Record<string, string> = {
+  CreatorCannotBet: "Sos el juez de este duelo: no podés apostar en tu propio pozo",
+  AlreadyOnOtherSide: "Ya estás del otro lado en esta apuesta",
+  BettingClosed: "Las apuestas ya cerraron",
+  BadState: "La apuesta no está en un estado válido para eso",
+  WrongAmount: "El monto no coincide con el fijo de esta apuesta",
+  BelowMin: "No llegás al mínimo de esta apuesta",
+  OverCap: "Superás el tope por persona",
+  InvalidOption: "Esa opción no existe",
+  TooEarly: "Todavía no se puede resolver: esperá al cierre",
+  NothingToClaim: "No tenés premio para cobrar acá",
+  AlreadySettled: "Ya cobraste en esta apuesta",
+  GraceNotOver: "Todavía no pasó el plazo de gracia",
+  ERC20InsufficientBalance: "No te alcanza el USDC: cargá el faucet en Activar",
+  ERC20InsufficientAllowance: "El permiso del USDC no alcanzó: probá de nuevo",
+};
+
+function findRevertData(e: any): `0x${string}` | null {
+  let cur = e;
+  for (let i = 0; i < 8 && cur; i++) {
+    const d = cur.data?.data ?? cur.data;
+    if (typeof d === "string" && d.startsWith("0x") && d.length >= 10) return d as `0x${string}`;
+    cur = cur.cause;
+  }
+  return null;
+}
+
+/** Simula la llamada INTERNA como la haría el forwarder (calldata + sender
+ *  al final, msg.sender = forwarder). Si revierte, tira un 400 con el motivo
+ *  humano en vez de dejar que execute() falle con FailedCall() → 500. */
+async function simulateInnerCall(req: ForwardRequestIn) {
+  const { pub } = clients();
+  try {
+    await pub.call({
+      to: getAddress(req.to),
+      data: concat([req.data as `0x${string}`, getAddress(req.from)]),
+      account: AMOY.forwarder as `0x${string}`,
+      gas: BigInt(req.gas),
+    });
+  } catch (e: any) {
+    const raw = findRevertData(e);
+    if (raw) {
+      try {
+        const dec = decodeErrorResult({
+          abi: [...BET_ABI, ...BET_FACTORY_ABI, ...MOCK_USDC_ABI] as any,
+          data: raw,
+        });
+        const msg = FRIENDLY_REVERTS[dec.errorName] ?? `El contrato rechazó la operación (${dec.errorName})`;
+        throw new ApiError(400, "CHAIN_REVERT", msg);
+      } catch (inner) {
+        if (inner instanceof ApiError) throw inner;
+      }
+    }
+    throw new ApiError(400, "CHAIN_REVERT", "El contrato rechazó la operación");
+  }
+}
+
 function clients() {
   const account = privateKeyToAccount(process.env.RELAYER_PRIVATE_KEY as `0x${string}`);
   const wallet = createWalletClient({ account, chain: amoyChain, transport: http(amoyChain.rpcUrls.default.http[0]) });
@@ -88,12 +148,16 @@ export async function relayExecute(req: ForwardRequestIn) {
   if (!relayEnabled())
     throw new ApiError(503, "RELAY_OFF", "El modo sin gas todavía no está activado");
   await validateRelayRequest(req);
+  await simulateInnerCall(req); // revert del contrato → 400 con motivo humano
 
   const { wallet, pub } = clients();
   const hash = await wallet.writeContract({
     address: AMOY.forwarder as `0x${string}`,
     abi: FORWARDER_ABI,
     functionName: "execute",
+    // gas al piso de Amoy (25 gwei): cada wei de más sale del POL del relayer
+    maxPriorityFeePerGas: 25_000_000_000n,
+    maxFeePerGas: 25_100_000_000n,
     args: [{
       from: getAddress(req.from),
       to: getAddress(req.to),
