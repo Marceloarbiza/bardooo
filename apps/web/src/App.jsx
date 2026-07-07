@@ -242,9 +242,10 @@ export default function App() {
     fire(`Recuperaste ${amt(r.currency, r.total)}`);
   };
 
+  const refSlug = me?.handle?.slice(1) ?? ""; // el handle sin @: link corto y con marca
+
   const invite = () => {
-    const code = me?.refCode ?? "";
-    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ ${window.location.origin}/i/${code}`;
+    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ ${window.location.origin}/i/${refSlug}`;
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(txt).then(() => {
         play("tick");
@@ -364,7 +365,7 @@ export default function App() {
                   fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
               )}
               {view === "detail" && active && (
-                <Detail b={active} now={now} fire={fire} refCode={me?.refCode} track={svc.track}
+                <Detail b={active} now={now} fire={fire} refCode={refSlug} track={svc.track}
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}

@@ -8,10 +8,14 @@ import { errors } from "../errors";
 
 export const REFERRAL_PRIZE = 25;
 
-/** Registra el vínculo (pendiente) al entrar con /i/{codigo}. Idempotente-ish:
- *  si ya fue referido alguna vez, no hace nada. */
+/** Registra el vínculo (pendiente) al entrar con /i/{codigo}. El código puede
+ *  ser el refCode técnico O el handle (los links usan el handle: más corto y
+ *  hace marca personal). Si ya fue referido alguna vez, no hace nada. */
 export async function useReferralCode(userId: string, code: string) {
-  const referrer = await prisma.user.findUnique({ where: { refCode: code.trim() } });
+  const clean = code.trim().replace(/^@/, "");
+  const referrer =
+    (await prisma.user.findUnique({ where: { refCode: clean } })) ??
+    (await prisma.user.findUnique({ where: { handle: "@" + clean.toLowerCase() } }));
   if (!referrer || referrer.id === userId) throw errors.badReferral();
 
   const existing = await prisma.referral.findUnique({ where: { referredId: userId } });
