@@ -14,7 +14,7 @@ import { ghost } from "./ui/styles";
 /* Dos arenas separadas (pedido del dueño): los duelos de PUNTOS y los de
    PLATA no se mezclan en el listado — igual que sus pozos.               */
 export function Feed({ bets, now, onOpen, tries, onGame, onLink }) {
-  const [arena, setArena] = useState("pts"); // pts | usdc
+  const [arena, setArena] = useState("usdc"); // la de plata primero: es LA arena
   const open = bets.filter((b) =>
     !b.isPrivate && (b.status === "open" || b.status === "locked") && b.currency === arena
   );
@@ -58,12 +58,12 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink }) {
         </span>
       </div>
 
-      {/* el switch de arenas: puntos y plata, cada una en su lugar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <ArenaTab on={arena === "pts"} col={C.si} onClick={() => setArena("pts")}
-          icon={<Zap size={13} fill={arena === "pts" ? C.bg : C.si} />} label="De puntos" />
+      {/* el switch de arenas: pills discretas, plata primero */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
         <ArenaTab on={arena === "usdc"} col={C.gold} onClick={() => setArena("usdc")}
-          icon={<CircleDot size={13} />} label="De plata" />
+          icon={<CircleDot size={11} />} label="De plata" />
+        <ArenaTab on={arena === "pts"} col={C.si} onClick={() => setArena("pts")}
+          icon={<Zap size={11} fill={arena === "pts" ? C.bg : C.si} />} label="De puntos" />
       </div>
 
       {open.length === 0 ? (
@@ -80,16 +80,16 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink }) {
   );
 }
 
+/* pill chica y discreta: el protagonismo es de las cartas, no del filtro */
 function ArenaTab({ on, col, onClick, icon, label }) {
   return (
     <button onClick={onClick} className="press" style={{
-      flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-      padding: "10px 12px", borderRadius: 14, cursor: "pointer",
-      fontFamily: "Syne", fontWeight: 800, fontSize: 13.5,
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "5px 12px", borderRadius: 999, cursor: "pointer",
+      fontWeight: 700, fontSize: 11.5,
       color: on ? C.bg : col,
-      background: on ? col : "transparent",
-      border: `1.5px solid ${on ? col : col + "44"}`,
-      boxShadow: on ? `0 8px 22px ${col}33` : "none",
+      background: on ? col : `${col}10`,
+      border: `1px solid ${on ? col : col + "44"}`,
       transition: "all .18s",
     }}>
       {icon} {label}
