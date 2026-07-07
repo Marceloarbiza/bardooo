@@ -245,9 +245,14 @@ export default function App() {
   const refSlug = me?.handle?.slice(1) ?? ""; // el handle sin @: link corto y con marca
 
   const invite = () => {
-    const txt = `Te invito a BARDOOO, la arena de apuestas entre amigos ⚡ ${window.location.origin}/i/${refSlug}`;
+    const url = `${window.location.origin}/i/${refSlug}`;
+    const txt = "Te invito a BARDOOO, la arena de apuestas entre amigos ⚡";
+    if (navigator.share) {
+      navigator.share({ text: txt, url }).then(() => svc.track("share")).catch(() => {});
+      return;
+    }
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(txt).then(() => {
+      navigator.clipboard.writeText(`${txt} ${url}`).then(() => {
         play("tick");
         svc.track("share"); // hito del embudo
         fire("Link copiado · sumás 25 pts cuando tu amigo entre y juegue");

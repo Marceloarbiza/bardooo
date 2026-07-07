@@ -39,8 +39,14 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
     // TODO link compartido lleva tu código de referido (CLAUDE.md): un duelo
     // concreto convierte mejor que la invitación genérica, misma recompensa
     const ref = refCode ? `?i=${refCode}` : "";
-    const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá: ${window.location.origin}/bet/${b.id}${ref}${b.code ? ` · código: ${b.code}` : ""}`;
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(txt).then(() => {
+    const url = `${window.location.origin}/bet/${b.id}${ref}`;
+    const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá${b.code ? ` (código: ${b.code})` : ""}:`;
+    // en el teléfono: share nativo del sistema (maneja texto+link como corresponde)
+    if (navigator.share) {
+      navigator.share({ text: txt, url }).then(() => track?.("share")).catch(() => {});
+      return;
+    }
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(`${txt} ${url}`).then(() => {
       track?.("share"); // hito del embudo
       fire("Link copiado · si alguien entra con tu link, sumás 25 pts");
     });
