@@ -24,10 +24,12 @@ contract DeployFactory is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         address treasury = vm.envAddress("TREASURY");
         address usdc = vm.envAddress("USDC_ADDR");
+        // fase 4: el forwarder del gasless (address(0) = sin gasless, fase 3)
+        address forwarder = vm.envOr("FORWARDER_ADDR", address(0));
 
         vm.startBroadcast(pk);
         BetFactory factory = new BetFactory(
-            address(0), // forwarder: llega con la fase gasless (ERC-2771)
+            forwarder,
             usdc,
             treasury,
             PLATFORM_FEE_BPS,
