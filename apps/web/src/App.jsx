@@ -303,6 +303,29 @@ export default function App() {
     } catch (e) {}
   }, [connected]);
 
+  /* sesión RECORDADA: al volver ya logueado no existe el click de "Conectar"
+     que habilita el audio (los navegadores exigen un gesto del usuario) — el
+     PRIMER toque o tecla en la app destraba sonido y música automáticamente */
+  useEffect(() => {
+    if (!connected) return;
+    if (sfx.ctx && sfx.ctx.state === "running") return; // ya está destrabado
+    const unlock = () => {
+      (async () => {
+        try {
+          await sfx.ensure();
+          startIfOn();
+          if (soundOn) sfx.tick(); // el blip de bienvenida, ahora sí
+        } catch (e) {}
+      })();
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [connected, soundOn, musicOn]);
+
   const ticker = activity.map((a) => ({ u: a.u, amt: a.amt, side: a.side, cur: a.cur }));
   const active = bets.find((b) => b.id === activeId) || null;
 
