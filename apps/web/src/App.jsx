@@ -325,7 +325,7 @@ export default function App() {
       else play("tick");
       fire(prize >= 10 ? `¡PERFECTO! Ganaste ${prize} pts` : `Ganaste ${prize} pts para apostar`, prize >= 10 ? "win" : "ok");
     } else {
-      fire("Ni un caño esta vez. ¡Otra!", "err");
+      fire("Ni un caño esta vez: pasá entre los pilares para sumar. ¡Otra!", "err");
     }
   };
 

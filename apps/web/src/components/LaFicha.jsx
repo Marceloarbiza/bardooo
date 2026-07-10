@@ -189,7 +189,7 @@ export function Game({ onBack, tries, onPrize, play, fichaStart, fichaEnd, onErr
               {prize >= 10 ? `¡${score} CAÑOS!` : prize > 0 ? `+${prize} pts` : "Te estrellaste"}
             </div>
             <div style={{ color: C.dim, fontSize: 13, marginTop: 4 }}>
-              {prize > 0 ? `${prize} pts sumados` : "Ni un caño esta vez"}
+              {prize > 0 ? `${prize} pts sumados` : "Ni un caño esta vez — los puntos se ganan pasando entre los pilares"}
               {tries > 0 ? ` · te ${tries === 1 ? "queda 1 vuelo" : `quedan ${tries} vuelos`}` : " · sin vuelos por hoy"}
             </div>
           </div>
