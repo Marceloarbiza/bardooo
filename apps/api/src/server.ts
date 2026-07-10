@@ -123,7 +123,38 @@ export async function buildServer(opts: ServerOpts) {
   app.get("/me", async (req) => {
     const user = requireUser(req);
     const u = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
-    return { user: serializeUser(u), flightsLeft: await flightsLeft(u.id) };
+    // estado de referidos, para que el +25 diferido sea VISIBLE y no magia:
+    // - invitedBy: me invitaron y todavía no jugué (banner "jugá y le regalás 25")
+    // - pending/accredited: mis invitados esperando su primera jugada / ya pagados
+    const [pendingIn, pending, accredited, lastPending, lastAccredited] = await Promise.all([
+      prisma.referral.findFirst({
+        where: { referredId: u.id, accredited: false },
+        include: { referrer: { select: { handle: true } } },
+      }),
+      prisma.referral.count({ where: { referrerId: u.id, accredited: false } }),
+      prisma.referral.count({ where: { referrerId: u.id, accredited: true } }),
+      prisma.referral.findFirst({
+        where: { referrerId: u.id, accredited: false },
+        orderBy: { createdAt: "desc" },
+        include: { referred: { select: { handle: true } } },
+      }),
+      prisma.referral.findFirst({
+        where: { referrerId: u.id, accredited: true },
+        orderBy: { createdAt: "desc" },
+        include: { referred: { select: { handle: true } } },
+      }),
+    ]);
+    return {
+      user: serializeUser(u),
+      flightsLeft: await flightsLeft(u.id),
+      referral: {
+        invitedBy: pendingIn?.referrer.handle ?? null,
+        pending,
+        accredited,
+        lastPendingHandle: lastPending?.referred.handle ?? null,
+        lastAccreditedHandle: lastAccredited?.referred.handle ?? null,
+      },
+    };
   });
 
   app.patch("/me", async (req) => {

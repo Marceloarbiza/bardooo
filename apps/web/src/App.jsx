@@ -10,6 +10,7 @@ import { useChainBetting, chainErrorMsg } from "./services/chainBetting";
 import { Style } from "./components/ui/Style";
 import { Bg } from "./components/ui/Bg";
 import { Burst, Toast } from "./components/ui/bits";
+import { PopModal } from "./components/ui/PopModal";
 import { Logo } from "./components/ui/brand";
 import { Header } from "./components/Header";
 import { Ticker } from "./components/Ticker";
@@ -54,6 +55,7 @@ export default function App() {
   const [showLink, setShowLink] = useState(false);
   const [linkPrefill, setLinkPrefill] = useState(null); // deep link que pide código
   const [pendingBetId, setPendingBetId] = useState(null);
+  const [popup, setPopup] = useState(null); // modales notorios de referidos
 
   const { soundOn, play, toggleSound } = useSound();
   const { musicOn, toggleMusic, startIfOn } = useMusic();
@@ -110,6 +112,53 @@ export default function App() {
       }
     })();
   }, [connected, pendingBetId]);
+
+  /* ---- referidos NOTORIOS (pedido del dueño): modales, no toasts fugaces ----
+     - invitado pendiente: bienvenida con la consigna clara (una vez)
+     - invitador: "¡tu amigo entró!" en vivo, y festejo cuando juega (+25)    */
+  const refPrev = useRef(null);
+  useEffect(() => {
+    const r = svc.referral;
+    if (!connected || !r || !me) return;
+    if (refPrev.current === null) {
+      refPrev.current = r;
+      if (r.invitedBy) {
+        const key = `bardooo:refwelcome:${me.handle}`;
+        let seen = null;
+        try { seen = localStorage.getItem(key); localStorage.setItem(key, "1"); } catch (e) {}
+        if (!seen) {
+          setPopup({
+            emoji: "🎁",
+            title: "¡Bienvenido a la arena!",
+            body: <>Te invitó <b style={{ color: C.si }}>{r.invitedBy}</b>. Ya tenés tus puntos para arrancar — y con tu primer vuelo de La Ficha o tu primera apuesta, le regalás 25 pts.</>,
+            cta: "¡A jugar!",
+          });
+        }
+      }
+      return;
+    }
+    const prev = refPrev.current;
+    if (r.pending > prev.pending && r.lastPendingHandle) {
+      play("tick");
+      setPopup({
+        emoji: "👋",
+        title: `¡${r.lastPendingHandle} ya entró!`,
+        body: "Tu invitación funcionó. En cuanto juegue su primera (un vuelo o una apuesta), te llevás +25 pts.",
+        cta: "Genial",
+      });
+    }
+    if (r.accredited > prev.accredited) {
+      setBurst(true); setTimeout(() => setBurst(false), 1700);
+      play("win");
+      setPopup({
+        emoji: "🎉",
+        title: "¡+25 pts!",
+        body: <>{r.lastAccreditedHandle ? <><b style={{ color: C.si }}>{r.lastAccreditedHandle}</b> jugó su primera.</> : "Tu invitado jugó su primera."} Gracias por agrandar la arena.</>,
+        cta: "¡Vamos!",
+      });
+    }
+    refPrev.current = r;
+  }, [svc.referral, connected, me]);
 
   /* juego responsable (fase puntos): recordatorio suave de tiempo de sesión */
   useEffect(() => {
@@ -363,6 +412,7 @@ export default function App() {
             <div style={{ padding: "0 16px 130px", position: "relative" }}>
               {view === "feed" && (
                 <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
+                  invitedBy={svc.referral?.invitedBy}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
               {view === "game" && (
@@ -379,6 +429,7 @@ export default function App() {
                 <Mine bets={bets} now={now} earned={earned} onInvite={invite}
                   profile={profile} onSaveName={saveName} onLogout={logout}
                   walletOn={walletOn} walletAddr={chain.address ?? ""} fire={fire}
+                  refStats={svc.referral}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
             </div>
@@ -402,6 +453,7 @@ export default function App() {
             )}
           </>
         )}
+        {popup && <PopModal {...popup} onClose={() => setPopup(null)} />}
         {burst && <Burst />}
         {toast && <Toast t={toast} />}
       </div>

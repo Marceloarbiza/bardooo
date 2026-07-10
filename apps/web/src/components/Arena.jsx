@@ -13,13 +13,32 @@ import { ghost } from "./ui/styles";
 /* =============================== FEED =============================== */
 /* Dos arenas separadas (pedido del dueño): los duelos de PUNTOS y los de
    PLATA no se mezclan en el listado — igual que sus pozos.               */
-export function Feed({ bets, now, onOpen, tries, onGame, onLink }) {
+export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy }) {
   const [arena, setArena] = useState("usdc"); // la de plata primero: es LA arena
   const open = bets.filter((b) =>
     !b.isPrivate && (b.status === "open" || b.status === "locked") && b.currency === arena
   );
   return (
     <div style={{ paddingTop: 16 }}>
+      {/* invitado con referido PENDIENTE: banner notorio hasta su primera jugada
+          (el +25 al invitador se acredita recién ahí — que no sea magia) */}
+      {invitedBy && (
+        <div className="rise" style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: `linear-gradient(90deg, ${C.si}18, ${C.bg2})`,
+          border: `1px solid ${C.si}66`, borderRadius: 18, padding: "13px 15px", marginBottom: 16,
+        }}>
+          <span style={{ fontSize: 20 }}>🎁</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 14 }}>
+              Te invitó <span style={{ color: C.si }}>{invitedBy}</span>
+            </div>
+            <div style={{ color: C.dim, fontSize: 12 }}>
+              Con tu primer vuelo de La Ficha o tu primera apuesta, le regalás 25 pts
+            </div>
+          </div>
+        </div>
+      )}
       <div onClick={tries > 0 ? onGame : undefined} className={tries > 0 ? "press rise" : "rise"} style={{
         display: "flex", alignItems: "center", gap: 12, cursor: tries > 0 ? "pointer" : "default",
         background: `linear-gradient(90deg, ${C.gold}1e, ${C.bg2})`,

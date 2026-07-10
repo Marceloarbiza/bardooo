@@ -6,7 +6,7 @@ import { Empty } from "./ui/bits";
 import { ProfileCard } from "./Profile";
 
 /* =============================== MINE =============================== */
-export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName, onLogout, walletOn, walletAddr, fire }) {
+export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName, onLogout, walletOn, walletAddr, fire, refStats }) {
   const mine = bets.filter((b) => b.creator.mine || b.myStake[0] > 0 || b.myStake[1] > 0);
   const created = bets.filter((b) => b.creator.mine);
   const pending = created.filter((b) => b.status === "locked");
@@ -32,7 +32,14 @@ export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName,
         <Share2 size={17} color={C.si} />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 13.5 }}>Invitá amigos, ganá 25 pts por cada uno</div>
-          <div style={{ color: C.dim, fontSize: 12 }}>Más gente = pozos más grandes en tus duelos</div>
+          <div style={{ color: C.dim, fontSize: 12 }}>
+            {refStats && (refStats.pending > 0 || refStats.accredited > 0)
+              ? <>
+                  {refStats.accredited > 0 && <span style={{ color: C.si }}>{refStats.accredited} ya te {refStats.accredited === 1 ? "pagó" : "pagaron"} · </span>}
+                  {refStats.pending > 0 && <span style={{ color: C.gold }}>{refStats.pending} {refStats.pending === 1 ? "espera" : "esperan"} su primera jugada (+25 al jugar)</span>}
+                </>
+              : "El premio cae cuando tu amigo entra y juega su primera"}
+          </div>
         </div>
         <ArrowRight size={16} color={C.si} />
       </div>

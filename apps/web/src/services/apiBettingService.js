@@ -22,6 +22,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   const [flightsLeft, setFlightsLeft] = useState(0);
   const [gaslessOn, setGaslessOn] = useState(false);
   const [knobs, setKnobs] = useState({ bondPts: 0, createsPerDay: 0 }); // perillas anti-bots
+  const [referral, setReferral] = useState({ invitedBy: null, pending: 0, accredited: 0 });
   const [onLiveHit, setOnLiveHit] = useState(null); // callback para el blip de actividad ajena
 
   const extraBetsRef = useRef(new Map()); // privadas abiertas por link (no vienen en /bets)
@@ -94,6 +95,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     setActivity(a.activity.filter((x) => x.type === "bet_placed"));
     setMe(m.user);
     setFlightsLeft(m.flightsLeft);
+    if (m.referral) setReferral(m.referral);
     return m.user;
   }, [call, mergeBets]);
 
@@ -110,6 +112,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     const m = await call("/me");
     setMe(m.user);
     setFlightsLeft(m.flightsLeft);
+    if (m.referral) setReferral(m.referral);
     return m.user;
   }, [call]);
 
@@ -291,7 +294,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   }, [call]);
 
   return {
-    bets, activity, me, flightsLeft, gaslessOn, knobs, relay, faucetServer,
+    bets, activity, me, flightsLeft, gaslessOn, knobs, referral, relay, faucetServer,
     placeBet, createBet, resolve, claim, refund,
     openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet, track,
     refreshAll, refreshMe,
