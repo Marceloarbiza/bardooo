@@ -13,7 +13,7 @@ const DURATIONS = [
   { label: "Configurable", v: "custom" },
 ];
 
-export function Create({ onCreate, onBack, walletOn }) {
+export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
   const [isPrivate, setIsPrivate] = useState(false);
   const [code, setCode] = useState("");
   const [question, setQuestion] = useState("");
@@ -151,6 +151,7 @@ export function Create({ onCreate, onBack, walletOn }) {
         </div>
         <div style={{ color: C.faint, fontSize: 11.5, lineHeight: 1.5 }}>
           Comisión total fija del 10% (7% vos + 3% BARDOOO). Sale del pozo y nunca hace que un ganador cobre menos de lo que puso. En relámpagos tu parte sube al 9%.
+          {bondPts > 0 && <> Al lanzar se retienen <b style={{ color: C.gold }}>{bondPts} pts de garantía</b>: te vuelven al cargar el resultado.</>}
         </div>
       </div>
 

@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
 import { getAddress, verifyMessage } from "viem";
 import { relayEnabled, relayExecute, faucetMint } from "./relay";
+import { getKnobs } from "./services/config";
 import { prisma } from "./db";
 import { ApiError, errors } from "./errors";
 import type { TokenVerifier } from "./auth";
@@ -75,13 +76,18 @@ export async function buildServer(opts: ServerOpts) {
 
   // el front lee esto en vez de hardcodear PLATFORM_BPS (trampa conocida de CLAUDE.md)
   // comisiones FIJAS (2026-07-05): normal 3+7, relámpago 1+9 — total SIEMPRE 10%
-  app.get("/config", async () => ({
-    platformBps: PLATFORM_BPS,
-    creatorBps: CREATOR_BPS,
-    flashPlatformBps: FLASH_PLATFORM_BPS,
-    flashCreatorBps: FLASH_CREATOR_BPS,
-    flashRebateBps: FLASH_REBATE_BPS,
-  }));
+  app.get("/config", async () => {
+    const knobs = await getKnobs();
+    return {
+      platformBps: PLATFORM_BPS,
+      creatorBps: CREATOR_BPS,
+      flashPlatformBps: FLASH_PLATFORM_BPS,
+      flashCreatorBps: FLASH_CREATOR_BPS,
+      flashRebateBps: FLASH_REBATE_BPS,
+      bondPts: knobs.bondPts, // el front avisa la garantía cuando está prendida
+      createsPerDay: knobs.createsPerDay,
+    };
+  });
 
   app.get("/bets", async (req) => ({ bets: await listPublicBets(req.user?.id) }));
 
@@ -239,7 +245,7 @@ export async function buildServer(opts: ServerOpts) {
 
   // meta-transacción firmada → la plataforma paga el gas (candados en relay.ts)
   app.post("/relay", { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } }, async (req) => {
-    requireUser(req); // solo usuarios logueados gastan nuestro gas
+    const user = requireUser(req); // solo usuarios logueados gastan nuestro gas
     const body = z.object({
       from: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
       to: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
@@ -249,7 +255,7 @@ export async function buildServer(opts: ServerOpts) {
       data: z.string(),
       signature: z.string(),
     }).parse(req.body);
-    return await relayExecute(body);
+    return await relayExecute(body, user.id);
   });
 
   // faucet de testnet sin gas: la plataforma mintea los 500 mUSDC

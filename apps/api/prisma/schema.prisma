@@ -45,6 +45,28 @@ enum LedgerReason {
   refund // devolución por anulación/cancelación
   bienvenida // los 60 pts iniciales
   ajuste // corrección manual de admin — SIEMPRE con motivo en ref (fase 5)
+  garantia // depósito del creador al crear; vuelve al resolver, se pierde por abandono
+}
+
+// Perillas de plataforma (una sola fila, id = 1) — cambiables al instante con
+// `pnpm admin config set` sin redeploy. 0 = apagado (decisión del dueño:
+// lanzar abierto para masividad; se prenden cuando los datos lo pidan).
+model PlatformConfig {
+  id                Int @id @default(1)
+  bondPts           Int @default(0) // garantía para crear duelo de puntos (0 = sin garantía)
+  createsPerDay     Int @default(0) // cupo de creaciones por cuenta/día (0 = sin límite)
+  relayBudgetMilli  Int @default(150) // FUSIBLE: tope de gasto del relayer en miliPOL/hora (SIEMPRE prendido)
+}
+
+// Gasto real del relayer por meta-tx (para el fusible y para medir el "costo
+// de marketing" del gasless, como pide CLAUDE.md).
+model RelaySpend {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  costWei   BigInt // gasUsed × effectiveGasPrice
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
 
 model User {
@@ -76,6 +98,7 @@ model Bet {
   maxStake      Int       @default(0) // si capped: tope por usuario
   maxBettors    Int       @default(0) // 0 = sin límite; tope TOTAL (nunca por lado)
   creatorBps    Int
+  bondAmount    Int       @default(0) // garantía retenida al creador (se guarda el monto real por si la perilla cambia)
   closeTime     DateTime
   resolveTime   DateTime
   status        BetStatus @default(open)

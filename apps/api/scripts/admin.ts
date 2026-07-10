@@ -14,6 +14,7 @@
 import "dotenv/config";
 import { prisma } from "../src/db";
 import { systemCancelBet } from "../src/services/bets";
+import { getKnobs, setKnob, type PlatformKnobs } from "../src/services/config";
 
 const [, , cmd, ...args] = process.argv;
 
@@ -121,8 +122,36 @@ async function main() {
       break;
     }
 
+    case "config": {
+      // perillas anti-bots (decisión del dueño: lanzar abierto, prender con datos)
+      const [key, value] = args;
+      if (key && value !== undefined) {
+        const valid = ["bondPts", "createsPerDay", "relayBudgetMilli"];
+        if (!valid.includes(key)) throw new Error(`Perillas válidas: ${valid.join(", ")}`);
+        const n = Math.trunc(Number(value));
+        if (!Number.isFinite(n) || n < 0) throw new Error("El valor debe ser un entero ≥ 0");
+        await setKnob(key as keyof PlatformKnobs, n);
+        console.log(`${key} = ${n} (rige en ≤15 s, sin redeploy)`);
+      } else {
+        const k = await getKnobs();
+        console.log("PERILLAS DE PLATAFORMA (0 = apagada)");
+        console.log(`  bondPts          = ${k.bondPts}  (garantía en pts para crear un duelo)`);
+        console.log(`  createsPerDay    = ${k.createsPerDay}  (cupo de creaciones por cuenta/día)`);
+        console.log(`  relayBudgetMilli = ${k.relayBudgetMilli}  (FUSIBLE: miliPOL/hora de gas patrocinado)`);
+        const hour = await prisma.relaySpend.aggregate({
+          _sum: { costWei: true }, where: { createdAt: { gte: new Date(Date.now() - 3600_000) } },
+        });
+        const day = await prisma.relaySpend.aggregate({
+          _sum: { costWei: true }, where: { createdAt: { gte: new Date(Date.now() - 86400_000) } },
+        });
+        const pol = (w: bigint | null) => (Number(w ?? 0n) / 1e18).toFixed(4);
+        console.log(`GASTO DEL RELAYER: última hora ${pol(hour._sum.costWei)} POL · último día ${pol(day._sum.costWei)} POL`);
+      }
+      break;
+    }
+
     default:
-      console.log("Comandos: bets · bet <id> · cancel <id> \"motivo\" · user @handle · points @handle <delta> \"motivo\" · funnel");
+      console.log("Comandos: bets · bet <id> · cancel <id> \"motivo\" · user @handle · points @handle <delta> \"motivo\" · funnel · config [perilla valor]");
   }
 }
 

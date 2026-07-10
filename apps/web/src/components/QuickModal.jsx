@@ -5,7 +5,7 @@ import { Seg, Stepper } from "./ui/bits";
 import { ghost } from "./ui/styles";
 
 /* ======================= RELÁMPAGO (bottom sheet) ======================= */
-export function QuickModal({ onClose, onCreate, goFull, walletOn }) {
+export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0 }) {
   const [question, setQuestion] = useState("");
   const [stakeMode, setStakeMode] = useState("free");
   const [fixedAmount, setFixedAmount] = useState(20);
@@ -82,6 +82,7 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn }) {
 
         <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 14px", lineHeight: 1.5 }}>
           Se lanza ya{walletOn ? " en USDC y en puntos" : " en puntos"} · cierra en {windowMin} min · tenés 30 min más para cargar el resultado o se anula · tu comisión <b style={{ color: C.gold }}>9%</b> (BARDOOO cobra solo 1%).
+          {bondPts > 0 && <> Se retienen <b style={{ color: C.gold }}>{bondPts} pts de garantía</b> que vuelven al resolver.</>}
         </p>
 
         <button onClick={submit} disabled={!valid} className="press" style={{

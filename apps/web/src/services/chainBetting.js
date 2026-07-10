@@ -159,15 +159,20 @@ export function useChainBetting({ me, onStatus, gasless }) {
   const placeBet = useCallback(async (chainAddress, option, amount) => {
     const micro = toMicro(amount);
     if (gaslessOn) {
-      const deadline = nowSec() + 3600;
-      onStatus?.("Firma 1 de 2: el permiso del USDC…");
-      const { v, r, s } = await signPermit(chainAddress, micro, deadline);
-      const data = encodeFunctionData({
-        abi: BET_ABI, functionName: "placeBetWithPermit",
-        args: [option, micro, BigInt(deadline), v, r, s],
-      });
-      await gaslessTx(chainAddress, data, 600_000, "Firma 2 de 2: la apuesta…");
-      return;
+      try {
+        const deadline = nowSec() + 3600;
+        onStatus?.("Firma 1 de 2: el permiso del USDC…");
+        const { v, r, s } = await signPermit(chainAddress, micro, deadline);
+        const data = encodeFunctionData({
+          abi: BET_ABI, functionName: "placeBetWithPermit",
+          args: [option, micro, BigInt(deadline), v, r, s],
+        });
+        await gaslessTx(chainAddress, data, 600_000, "Firma 2 de 2: la apuesta…");
+        return;
+      } catch (e) {
+        if (e?.code !== "RELAY_BUSY") throw e; // el fusible saltó → tx directa
+        onStatus?.("Modo sin gas saturado: va con tu gas…");
+      }
     }
     await tx({
       address: AMOY.usdc, abi: MOCK_USDC_ABI, functionName: "approve",
@@ -200,9 +205,14 @@ export function useChainBetting({ me, onStatus, gasless }) {
     };
 
     if (gaslessOn) {
-      const data = encodeFunctionData({ abi: BET_FACTORY_ABI, functionName: "createBet", args: [cfg] });
-      await gaslessTx(AMOY.betFactory, data, 2_500_000, "Firmá el lanzamiento (sin gas)…");
-      return null; // el indexer lo materializa en segundos
+      try {
+        const data = encodeFunctionData({ abi: BET_FACTORY_ABI, functionName: "createBet", args: [cfg] });
+        await gaslessTx(AMOY.betFactory, data, 2_500_000, "Firmá el lanzamiento (sin gas)…");
+        return null; // el indexer lo materializa en segundos
+      } catch (e) {
+        if (e?.code !== "RELAY_BUSY") throw e; // el fusible saltó → tx directa
+        onStatus?.("Modo sin gas saturado: va con tu gas…");
+      }
     }
     const receipt = await tx({
       address: AMOY.betFactory, abi: BET_FACTORY_ABI, functionName: "createBet",
@@ -219,12 +229,17 @@ export function useChainBetting({ me, onStatus, gasless }) {
 
   const simpleCall = useCallback(async (chainAddress, fn, args, label) => {
     if (gaslessOn) {
-      const data = encodeFunctionData({ abi: BET_ABI, functionName: fn, args });
-      await gaslessTx(chainAddress, data, 400_000, label + " (sin gas)…");
-      return;
+      try {
+        const data = encodeFunctionData({ abi: BET_ABI, functionName: fn, args });
+        await gaslessTx(chainAddress, data, 400_000, label + " (sin gas)…");
+        return;
+      } catch (e) {
+        if (e?.code !== "RELAY_BUSY") throw e; // el fusible saltó → tx directa
+        onStatus?.("Modo sin gas saturado: va con tu gas…");
+      }
     }
     await tx({ address: chainAddress, abi: BET_ABI, functionName: fn, args }, label + "…");
-  }, [gaslessOn, gaslessTx, tx]);
+  }, [gaslessOn, gaslessTx, tx, onStatus]);
 
   const resolve = useCallback((a, option) => simpleCall(a, "resolve", [option], "Firmá el resultado"), [simpleCall]);
   const claim = useCallback((a) => simpleCall(a, "claim", [], "Firmá el cobro"), [simpleCall]);

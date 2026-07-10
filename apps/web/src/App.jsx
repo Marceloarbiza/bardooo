@@ -374,7 +374,7 @@ export default function App() {
                   onBack={() => setView("feed")}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}
-              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={walletOn} />}
+              {view === "create" && <Create onCreate={createBet} onBack={() => setView("feed")} walletOn={walletOn} bondPts={svc.knobs.bondPts} />}
               {view === "mine" && (
                 <Mine bets={bets} now={now} earned={earned} onInvite={invite}
                   profile={profile} onSaveName={saveName} onLogout={logout}
@@ -395,7 +395,7 @@ export default function App() {
                 onLink={svc.linkWallet} fire={fire} />
             )}
             {showQuick && (
-              <QuickModal walletOn={walletOn}
+              <QuickModal walletOn={walletOn} bondPts={svc.knobs.bondPts}
                 onClose={() => setShowQuick(false)}
                 onCreate={(f) => { setShowQuick(false); createBet(f); }}
                 goFull={() => { setShowQuick(false); setView("create"); }} />

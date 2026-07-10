@@ -3,13 +3,41 @@ import { prisma, type Tx } from "../db";
 import { ApiError, errors } from "../errors";
 import { computeResolution, computeClaimPayout, PLATFORM_BPS, CREATOR_BPS } from "../settlement";
 import { accreditIfPending } from "./referrals";
+import { getKnobs } from "./config";
 
 /*  Reglas duras que este servicio hace cumplir EN EL SERVER (el cliente jamás
     valida solo): lado único, mín/fijo/tope, saldo, estado, ventana de tiempo,
     código de privadas hasheado, relámpago con deadline fijo cierre+30min.     */
 
 const FLASH_DEADLINE_MIN = 30; // relámpago: cierre + 30 min o se anula
+const GRACE_HOURS = 4; // paridad con el contrato: sin resultado tras resolveTime + 4h → anulación
 const MAX_QUESTION = 200;
+
+/* ---- garantía del creador (anti-bots + juez con skin in the game) ----
+   Se retiene al crear (si la perilla bondPts > 0), VUELVE al resolver o al
+   cancelar sin culpa, y SE PIERDE por abandono (treasury: en puntos es el
+   sink de la plataforma — el débito original queda como registro).        */
+
+/** Cupo de creaciones por cuenta/día (perilla; 0 = sin límite). Cuenta pts y
+ *  usdc juntos (los espejos no: los crea el sistema). */
+export async function assertCreateQuota(userId: string) {
+  const { createsPerDay } = await getKnobs();
+  if (createsPerDay <= 0) return;
+  const since = new Date(Date.now() - 24 * 3600 * 1000);
+  const n = await prisma.bet.count({
+    where: { creatorId: userId, createdAt: { gte: since }, mirrorOfId: null },
+  });
+  if (n >= createsPerDay)
+    throw new ApiError(429, "CREATE_LIMIT", `Llegaste al tope de ${createsPerDay} duelos por día. Mañana hay más`);
+}
+
+async function refundBondTx(tx: Tx, b: { id: number; creatorId: string; bondAmount: number }) {
+  if (b.bondAmount <= 0) return;
+  await tx.user.update({ where: { id: b.creatorId }, data: { points: { increment: b.bondAmount } } });
+  await tx.pointsLedger.create({
+    data: { userId: b.creatorId, delta: b.bondAmount, reason: "garantia", ref: `bet:${b.id}:devolucion` },
+  });
+}
 
 export const hashCode = (code: string) =>
   createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
@@ -176,26 +204,49 @@ export async function createBet(userId: string, input: CreateBetInput) {
   const code = (input.code ?? "").trim();
   if (code && code.length > 12) throw new ApiError(400, "BAD_CODE", "El código va hasta 12 caracteres");
 
-  const bet = await prisma.bet.create({
-    data: {
-      creatorId: userId,
-      question: q,
-      currency: "pts",
-      stakeMode: input.stakeMode,
-      fixedAmount,
-      minStake,
-      maxStake,
-      maxBettors: Math.max(0, Math.trunc(input.maxBettors ?? 0)),
-      creatorBps: CREATOR_BPS, // fijo: 7% (el bonus flash lo aplica el split al resolver)
-      closeTime: new Date(closeTime),
-      resolveTime: new Date(resolveTime),
-      isPrivate,
-      codeHash: isPrivate && code ? hashCode(code) : null,
-      relampago,
-      launch: new Date(now),
-      deadline: deadline ? new Date(deadline) : null,
-    },
-    include: { stakes: true, creator: { select: { id: true, name: true, handle: true } } },
+  await assertCreateQuota(userId); // perilla de cupo (0 = sin límite)
+  const { bondPts } = await getKnobs(); // perilla de garantía (0 = sin garantía)
+
+  const bet = await prisma.$transaction(async (tx) => {
+    // la garantía se retiene ATOMICAMENTE con la creación (si la perilla está prendida)
+    if (bondPts > 0) {
+      const debit = await tx.user.updateMany({
+        where: { id: userId, points: { gte: bondPts } },
+        data: { points: { decrement: bondPts } },
+      });
+      if (debit.count === 0)
+        throw new ApiError(400, "BOND_POINTS", `Crear un duelo retiene ${bondPts} pts de garantía (te vuelven al resolver) y no te alcanzan`);
+    }
+
+    const created = await tx.bet.create({
+      data: {
+        creatorId: userId,
+        question: q,
+        currency: "pts",
+        stakeMode: input.stakeMode,
+        fixedAmount,
+        minStake,
+        maxStake,
+        maxBettors: Math.max(0, Math.trunc(input.maxBettors ?? 0)),
+        creatorBps: CREATOR_BPS, // fijo: 7% (el bonus flash lo aplica el split al resolver)
+        bondAmount: bondPts,
+        closeTime: new Date(closeTime),
+        resolveTime: new Date(resolveTime),
+        isPrivate,
+        codeHash: isPrivate && code ? hashCode(code) : null,
+        relampago,
+        launch: new Date(now),
+        deadline: deadline ? new Date(deadline) : null,
+      },
+      include: { stakes: true, creator: { select: { id: true, name: true, handle: true } } },
+    });
+
+    if (bondPts > 0) {
+      await tx.pointsLedger.create({
+        data: { userId, delta: -bondPts, reason: "garantia", ref: `bet:${created.id}` },
+      });
+    }
+    return created;
   });
 
   // NOTA espejo (fase 3): si el creador tiene walletAddr, acá nace también el
@@ -296,7 +347,8 @@ export async function resolveBet(userId: string, betId: number, option: number) 
     const now = Date.now();
     if (now < b.resolveTime.getTime()) throw errors.tooEarly();
 
-    // relámpago vencido: ya no se puede resolver — se anula (el cron lo haría igual)
+    // relámpago vencido: ya no se puede resolver — se anula por ABANDONO
+    // (la garantía NO vuelve: se pierde al treasury)
     if (b.relampago && b.deadline && now > b.deadline.getTime()) {
       await cancelWithRefunds(tx, b.id, b.stakes);
       return { cancelled: true as const };
@@ -310,6 +362,7 @@ export async function resolveBet(userId: string, betId: number, option: number) 
 
     if (r.kind === "cancelled") {
       await cancelWithRefunds(tx, b.id, b.stakes);
+      await refundBondTx(tx, b); // anulación SIN culpa (sin contraparte): garantía devuelta
       return { cancelled: true as const };
     }
 
@@ -317,6 +370,7 @@ export async function resolveBet(userId: string, betId: number, option: number) 
       where: { id: b.id },
       data: { status: "resolved", winningOption: option, dust: r.dust },
     });
+    await refundBondTx(tx, b); // el juez resolvió: su garantía vuelve
 
     // comisión del creador: se acredita YA (la de plataforma en puntos es un sink auditable via dust+ledger)
     if (r.creatorCut > 0) {
@@ -396,7 +450,8 @@ async function cancelWithRefunds(
   }
 }
 
-/** El creador anula (empate / evento suspendido). Devuelve todo, sin comisión. */
+/** El creador anula (empate / evento suspendido). Devuelve todo, sin comisión.
+ *  Cancelar dando la cara NO es abandono: la garantía vuelve. */
 export async function cancelBet(userId: string, betId: number) {
   return prisma.$transaction(async (tx) => {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
@@ -404,6 +459,7 @@ export async function cancelBet(userId: string, betId: number) {
     if (b.creatorId !== userId) throw errors.notCreator();
     if (b.status !== "open") throw errors.badState();
     await cancelWithRefunds(tx, b.id, b.stakes);
+    await refundBondTx(tx, b);
     return { cancelled: true };
   });
 }
@@ -446,6 +502,7 @@ export async function systemResolveBet(betId: number, option: number) {
 
     if (r.kind === "cancelled") {
       await cancelWithRefunds(tx, b.id, b.stakes);
+      await refundBondTx(tx, b); // sin contraparte: sin culpa del juez
       return { cancelled: true as const };
     }
 
@@ -453,6 +510,7 @@ export async function systemResolveBet(betId: number, option: number) {
       where: { id: b.id },
       data: { status: "resolved", winningOption: option, dust: r.dust },
     });
+    await refundBondTx(tx, b); // resolvió: la garantía vuelve
     if (r.creatorCut > 0) {
       await tx.user.update({ where: { id: b.creatorId }, data: { points: { increment: r.creatorCut } } });
       await tx.pointsLedger.create({
@@ -468,17 +526,28 @@ export async function systemCancelBet(betId: number) {
     const b = await tx.bet.findUnique({ where: { id: betId }, include: { stakes: true } });
     if (!b || b.status !== "open") return null;
     await cancelWithRefunds(tx, b.id, b.stakes);
+    await refundBondTx(tx, b); // cancelación de sistema/espejo: no es abandono del juez
     return { cancelled: true };
   });
 }
 
 /* ---------------- cron: relámpagos vencidos ---------------- */
 
-/** Anula (y devuelve) los relámpagos cuyo deadline pasó sin resultado.
- *  Corre cada minuto; también se dispara lazy al intentar resolver vencido. */
+/** Anula (y devuelve) los duelos de puntos ABANDONADOS: relámpagos con el
+ *  deadline vencido y duelos comunes sin resolver tras resolveTime + 4h de
+ *  gracia (paridad con la válvula del contrato). La garantía del creador NO
+ *  se devuelve: abandono = garantía al treasury. Corre cada minuto. */
 export async function expireOverdueRelampagos(now = Date.now()) {
   const overdue = await prisma.bet.findMany({
-    where: { relampago: true, status: "open", deadline: { lt: new Date(now) } },
+    where: {
+      currency: "pts",
+      status: "open",
+      mirrorOfId: null, // los gemelos-espejo siguen SOLO a la cadena (jamás al reloj del server)
+      OR: [
+        { relampago: true, deadline: { lt: new Date(now) } },
+        { relampago: false, resolveTime: { lt: new Date(now - GRACE_HOURS * 3600 * 1000) } },
+      ],
+    },
     include: { stakes: true },
     take: 100,
   });
@@ -487,7 +556,8 @@ export async function expireOverdueRelampagos(now = Date.now()) {
       // re-chequeo dentro de la tx (pudo resolverse en el medio)
       const fresh = await tx.bet.findUniqueOrThrow({ where: { id: b.id }, include: { stakes: true } });
       if (fresh.status !== "open") return;
-      await cancelWithRefunds(tx, fresh.id, fresh.stakes);
+      await cancelWithRefunds(tx, fresh.id, fresh.stakes); // los apostadores recuperan TODO
+      // la garantía del creador NO vuelve: eso es el castigo por abandonar
     });
   }
   return overdue.length;

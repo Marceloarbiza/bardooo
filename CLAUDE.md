@@ -111,6 +111,26 @@ cripto-nativo entra directo con su wallet). Requiere el toggle de Wallet login
 en el dashboard de Privy. El usuario que entra con wallet igual pasa por
 "Firmar y vincular" en Activar (1 firma) para atarla a su cuenta BARDOOO.
 
+### DECISIÓN DEL DUEÑO (2026-07-09): anti-bots TODO configurable, lanzamiento ABIERTO
+Miedo raíz: bots que atomicen el relayer y "me maten con el gas". Diseño en
+tres capas, TODAS perillas en DB (`pnpm admin config [set]`, rigen en ≤15 s
+sin redeploy), y el dueño lanza con las dos primeras APAGADAS para masividad:
+1. **Garantía del creador** (`bondPts`, default 0): se retiene al crear, VUELVE
+   al resolver o cancelar sin culpa (incluye sin-contraparte), SE PIERDE por
+   abandono → treasury (en pts: sink; el débito del ledger queda de registro).
+   Doble propósito: anti-spam + el juez con skin in the game. Garantía USDC
+   on-chain: próxima iteración del contrato.
+2. **Cupo de creaciones/día** (`createsPerDay`, default 0 = sin límite): mata
+   el reciclaje de garantías; rige en la API pts Y en el relay gasless (crear
+   es lo más caro de patrocinar).
+3. **FUSIBLE del relayer** (`relayBudgetMilli`, default 150 miliPOL/hora,
+   SIEMPRE prendido): tope de gasto real por hora (RelaySpend registra
+   gasUsed×price por usuario — también es la métrica de costo de marketing).
+   Al saltar → 503 RELAY_BUSY y el front cae solo a transacción directa.
+BONUS de la misma tanda: gracia de 4 h para duelos de puntos comunes
+(paridad con la válvula del contrato; los espejos siguen SOLO a la cadena) —
+antes los duelos pts modo-completo abandonados quedaban abiertos para siempre.
+
 ### DECISIONES DEL DUEÑO (2026-07-05, fase 3) — reemplazan lo anterior
 1. **Comisiones FIJAS, sin slider del creador**: normal = 3% plataforma + 7%
    creador; relámpago = 1% plataforma + 9% creador. Total al apostador SIEMPRE
@@ -231,14 +251,18 @@ HECHO:
     firmas (permit EIP-2612 + ForwardRequest EIP-712) → /relay: cero gas, cero
     POL, cero vocabulario cripto. Fallback automático a tx directas si está
     apagado.
-  PARA ACTIVAR FASE 4: (1) faucet ~0.15 POL al deployer; (2) forge script
-  Deploy.s.sol (redeploya TODO: usdc+forwarder+factory); (3) actualizar
-  addresses.ts (usdc/betFactory/forwarder/deployBlock) y resetear IndexerState;
-  (4) verificar contratos; (5) redeploy api+front. OJO: los bets usdc viejos
-  quedan huérfanos (testnet, sin valor). El relayer gasta POL del deployer:
-  mantenerlo fondeado y medir gasto por apuesta (es marketing).
+  **FASE 4 ACTIVADA EN PRODUCCIÓN (2026-07-07)** — deploy en dos tandas (el
+  faucet da 0.1 POL/día): MockUSDC c/permit
+  0x01Df2c4E9a8017929F8Ab09bbf157F6bb2C54B58, Forwarder
+  0x7fdcDfD287eB7EdDC38Fd5b7e69Ba3d9aF594386, BetFactory
+  0xEcAB252e657E47e59eAC67e52b2Ba7E24f1AeDA1 (fees 300/700 y 100/900, grace 4h,
+  todo verificado en Polygonscan y con cast). /relay/status → enabled:true.
+  Los contratos fase-3 quedaron huérfanos (0 duelos usdc había en prod). OJO:
+  el saldo mUSDC del token VIEJO no migra — re-faucetear en la app (el server
+  mintea el nuevo). El relayer gasta POL del deployer (~0.005-0.015 por acción
+  gasless): MANTENERLO FONDEADO (faucet diario) y medir con el embudo.
   NOTA: habilitar "Embedded wallets" en el dashboard de Privy si el
-  createWallet() falla en runtime (config del SDK ya está).
+  createWallet() falla en runtime (ya probado OK el 2026-07-05).
 - **FASE 5 primera tanda (2026-07-05)**:
   - DEEP LINKS reales: /bet/:id (abre el detalle; si es privada con código,
     cae al gate del LinkModal), /i/:codigo y ?i=codigo (el referido se guarda

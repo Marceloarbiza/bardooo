@@ -21,6 +21,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   const [me, setMe] = useState(null);
   const [flightsLeft, setFlightsLeft] = useState(0);
   const [gaslessOn, setGaslessOn] = useState(false);
+  const [knobs, setKnobs] = useState({ bondPts: 0, createsPerDay: 0 }); // perillas anti-bots
   const [onLiveHit, setOnLiveHit] = useState(null); // callback para el blip de actividad ajena
 
   const extraBetsRef = useRef(new Map()); // privadas abiertas por link (no vienen en /bets)
@@ -275,6 +276,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     apiFetch("/config").then((c) => {
       if (c.platformBps !== PLATFORM_BPS)
         console.error(`PLATFORM_BPS desincronizado: front ${PLATFORM_BPS} vs server ${c.platformBps}`);
+      setKnobs({ bondPts: c.bondPts ?? 0, createsPerDay: c.createsPerDay ?? 0 });
     }).catch(() => {});
     apiFetch("/relay/status").then((r) => setGaslessOn(!!r.enabled)).catch(() => {});
   }, [enabled]);
@@ -289,7 +291,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   }, [call]);
 
   return {
-    bets, activity, me, flightsLeft, gaslessOn, relay, faucetServer,
+    bets, activity, me, flightsLeft, gaslessOn, knobs, relay, faucetServer,
     placeBet, createBet, resolve, claim, refund,
     openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet, track,
     refreshAll, refreshMe,

@@ -4,6 +4,8 @@ import { AMOY, FORWARDER_ABI, MOCK_USDC_ABI, BET_FACTORY_ABI, BET_ABI } from "@b
 import { toFunctionSelector } from "viem";
 import { prisma } from "./db";
 import { ApiError } from "./errors";
+import { getKnobs } from "./services/config";
+import { assertCreateQuota } from "./services/bets";
 
 /*  RELAYER (fase 4): "el gas lo paga BARDOOO".
     El usuario firma un ForwardRequest (EIP-712); esto lo ejecuta en el
@@ -143,11 +145,37 @@ function clients() {
   return { account, wallet, pub };
 }
 
+/* ---- EL FUSIBLE (siempre prendido): tope de gasto real del relayer por hora.
+   Si un ataque (o un pico) excede el presupuesto, el gasless se PAUSA solito
+   en vez de fundir la wallet — el front cae a transacción directa. Cada gasto
+   queda registrado en RelaySpend (también es la métrica de costo/usuario).  */
+export async function assertRelayBudget() {
+  const { relayBudgetMilli } = await getKnobs();
+  if (relayBudgetMilli <= 0) return; // 0 = fusible desactivado (no recomendado)
+  const since = new Date(Date.now() - 3600_000);
+  const agg = await prisma.relaySpend.aggregate({
+    _sum: { costWei: true },
+    where: { createdAt: { gte: since } },
+  });
+  const spentWei = agg._sum.costWei ?? 0n;
+  const budgetWei = BigInt(relayBudgetMilli) * 10n ** 15n; // miliPOL → wei
+  if (spentWei >= budgetWei)
+    throw new ApiError(503, "RELAY_BUSY", "Mucha demanda de jugadas sin gas: probá de nuevo en unos minutos");
+}
+
 /** Ejecuta la meta-tx en el forwarder pagando el gas. Devuelve el txHash. */
-export async function relayExecute(req: ForwardRequestIn) {
+export async function relayExecute(req: ForwardRequestIn, userId: string) {
   if (!relayEnabled())
     throw new ApiError(503, "RELAY_OFF", "El modo sin gas todavía no está activado");
   await validateRelayRequest(req);
+  await assertRelayBudget(); // el fusible, antes de gastar un wei
+
+  // el cupo de creaciones también rige por acá: crear gasless es lo más caro
+  const selector = slice(req.data as `0x${string}`, 0, 4);
+  if (getAddress(req.to) === getAddress(AMOY.betFactory) && factorySelectors.has(selector)) {
+    await assertCreateQuota(userId);
+  }
+
   await simulateInnerCall(req); // revert del contrato → 400 con motivo humano
 
   const { wallet, pub } = clients();
@@ -169,6 +197,12 @@ export async function relayExecute(req: ForwardRequestIn) {
     }],
   });
   const receipt = await pub.waitForTransactionReceipt({ hash });
+
+  // registrar el gasto REAL: alimenta el fusible y la métrica de costo por usuario
+  await prisma.relaySpend.create({
+    data: { userId, costWei: receipt.gasUsed * receipt.effectiveGasPrice },
+  }).catch(() => {}); // si falla el registro, la tx ya salió: no romper la respuesta
+
   return { hash, status: receipt.status };
 }
 
