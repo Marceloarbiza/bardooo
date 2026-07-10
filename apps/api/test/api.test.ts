@@ -353,6 +353,19 @@ describe("referidos (+25 recién con la primera acción real)", () => {
   });
 });
 
+describe("tiempos al crear", () => {
+  it("evento demasiado pronto (el cierre de 5-min-antes ya pasó) → rechazado", async () => {
+    // el front resta los 5 min y valida, pero la regla vive en el SERVER:
+    // un cliente trucho mandando un closeTime pasado rebota igual
+    const r = await api("POST", "/bets", "diego", {
+      question: "¿Se puede crear con el cierre ya pasado?", stakeMode: "free",
+      minStake: 5, closeTime: Date.now() - 60_000, resolveTime: Date.now() + 3600_000,
+    });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toBe("BAD_TIME");
+  });
+});
+
 describe("USDC todavía no (fase 3)", () => {
   it("crear duelo usdc → 'pronto'", async () => {
     const r = await api("POST", "/bets", "diego", {

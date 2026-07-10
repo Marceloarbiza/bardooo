@@ -136,7 +136,7 @@ export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
         {!timeOk && (
           <div style={{ color: C.no, fontSize: 12, marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
             <X size={14} /> {isNaN(eventTime) ? "Elegí fecha y hora del evento" :
-              closeTime <= Date.now() ? "El evento es muy pronto: el cierre ya pasó" :
+              closeTime <= Date.now() ? "El evento es muy pronto (las apuestas cierran 5 min antes) — para algo que arranca ya, usá el Relámpago ⚡" :
               "El resultado tiene que ser después del evento"}
           </div>
         )}
