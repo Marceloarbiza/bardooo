@@ -21,7 +21,13 @@ createRoot(document.getElementById("root")).render(
         theme: "dark",
         accentColor: C.si,
       },
-      embeddedWallets: { createOnLogin: "off" },
+      embeddedWallets: {
+        createOnLogin: "off",
+        // sin modal de confirmación de Privy al firmar: en móvil/PWA ese modal
+        // se tranca (caso real de la beta) y además toda firma nuestra ya nace
+        // de un botón explícito del usuario — era confirmar la confirmación
+        showWalletUIs: false,
+      },
     }}
   >
     <QueryClientProvider client={queryClient}>
