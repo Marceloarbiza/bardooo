@@ -124,7 +124,9 @@ async function main() {
 
     case "config": {
       // perillas anti-bots (decisión del dueño: lanzar abierto, prender con datos)
-      const [key, value] = args;
+      // acepta "config set <perilla> <valor>" y "config <perilla> <valor>"
+      const cfgArgs = args[0] === "set" ? args.slice(1) : args;
+      const [key, value] = cfgArgs;
       if (key && value !== undefined) {
         const valid = ["bondPts", "createsPerDay", "relayBudgetMilli"];
         if (!valid.includes(key)) throw new Error(`Perillas válidas: ${valid.join(", ")}`);
