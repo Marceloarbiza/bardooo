@@ -56,6 +56,13 @@ model PlatformConfig {
   bondPts           Int @default(0) // garantía para crear duelo de puntos (0 = sin garantía)
   createsPerDay     Int @default(0) // cupo de creaciones por cuenta/día (0 = sin límite)
   relayBudgetMilli  Int @default(150) // FUSIBLE: tope de gasto del relayer en miliPOL/hora (SIEMPRE prendido)
+  // comisiones (decisión del dueño 2026-07-10): perillas, no constantes.
+  // Invariantes (espejo de la factory): total normal == total flash, total ≤ 20%.
+  // Cada duelo CONGELA sus bps al nacer — cambiar la perilla no toca pozos abiertos.
+  platformBps       Int @default(300) // duelo común: share de plataforma
+  creatorBps        Int @default(700) // duelo común: share del creador
+  flashPlatformBps  Int @default(100) // relámpago: share de plataforma
+  flashCreatorBps   Int @default(900) // relámpago: share del creador
 }
 
 // Gasto real del relayer por meta-tx (para el fusible y para medir el "costo
@@ -97,6 +104,9 @@ model Bet {
   minStake      Int
   maxStake      Int       @default(0) // si capped: tope por usuario
   maxBettors    Int       @default(0) // 0 = sin límite; tope TOTAL (nunca por lado)
+  // bps CONGELADOS al crear (como la factory on-chain): cambiar las perillas
+  // de comisión jamás cambia la economía de un pozo ya abierto
+  platformBps   Int       @default(300)
   creatorBps    Int
   bondAmount    Int       @default(0) // garantía retenida al creador (se guarda el monto real por si la perilla cambia)
   closeTime     DateTime

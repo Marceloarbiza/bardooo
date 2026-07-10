@@ -14,7 +14,6 @@ import {
 } from "./services/bets";
 import { startFlight, endFlight, flightsLeft } from "./services/ficha";
 import { useReferralCode } from "./services/referrals";
-import { PLATFORM_BPS, CREATOR_BPS, FLASH_PLATFORM_BPS, FLASH_CREATOR_BPS, FLASH_REBATE_BPS } from "./settlement";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -75,15 +74,15 @@ export async function buildServer(opts: ServerOpts) {
   app.get("/health", async () => ({ ok: true }));
 
   // el front lee esto en vez de hardcodear PLATFORM_BPS (trampa conocida de CLAUDE.md)
-  // comisiones FIJAS (2026-07-05): normal 3+7, relámpago 1+9 — total SIEMPRE 10%
+  // comisiones (2026-07-10): PERILLAS de plataforma — lo que se sirve acá es lo
+  // que van a congelar los duelos NUEVOS; los abiertos muestran su feeBps propio
   app.get("/config", async () => {
     const knobs = await getKnobs();
     return {
-      platformBps: PLATFORM_BPS,
-      creatorBps: CREATOR_BPS,
-      flashPlatformBps: FLASH_PLATFORM_BPS,
-      flashCreatorBps: FLASH_CREATOR_BPS,
-      flashRebateBps: FLASH_REBATE_BPS,
+      platformBps: knobs.platformBps,
+      creatorBps: knobs.creatorBps,
+      flashPlatformBps: knobs.flashPlatformBps,
+      flashCreatorBps: knobs.flashCreatorBps,
       bondPts: knobs.bondPts, // el front avisa la garantía cuando está prendida
       createsPerDay: knobs.createsPerDay,
     };

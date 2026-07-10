@@ -5,7 +5,11 @@ import { Seg, Stepper } from "./ui/bits";
 import { ghost } from "./ui/styles";
 
 /* ======================= RELÁMPAGO (bottom sheet) ======================= */
-export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0 }) {
+export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, fees }) {
+  // comisiones vigentes del relámpago (perillas del server, /config)
+  const fPlat = (fees?.flashPlatformBps ?? 100) / 100;
+  const fCre = (fees?.flashCreatorBps ?? 900) / 100;
+  const pct = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}%`;
   const [question, setQuestion] = useState("");
   const [stakeMode, setStakeMode] = useState("free");
   const [fixedAmount, setFixedAmount] = useState(20);
@@ -81,7 +85,7 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0 })
           steps={[-5, 5]} min={5} max={60} onChange={setWindowMin} />
 
         <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 14px", lineHeight: 1.5 }}>
-          Se lanza ya{walletOn ? " en USDC y en puntos" : " en puntos"} · cierra en {windowMin} min · tenés 30 min más para cargar el resultado o se anula · tu comisión <b style={{ color: C.gold }}>9%</b> (BARDOOO cobra solo 1%).
+          Se lanza ya{walletOn ? " en USDC y en puntos" : " en puntos"} · cierra en {windowMin} min · tenés 30 min más para cargar el resultado o se anula · tu comisión <b style={{ color: C.gold }}>{pct(fCre)}</b> ({fPlat > 0 ? `BARDOOO cobra solo ${pct(fPlat)}` : "BARDOOO no cobra nada"}).
           {bondPts > 0 && <> Se retienen <b style={{ color: C.gold }}>{bondPts} pts de garantía</b> que vuelven al resolver.</>}
         </p>
 

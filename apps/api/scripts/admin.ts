@@ -14,7 +14,7 @@
 import "dotenv/config";
 import { prisma } from "../src/db";
 import { systemCancelBet } from "../src/services/bets";
-import { getKnobs, setKnob, type PlatformKnobs } from "../src/services/config";
+import { getKnobs, setKnobs, type PlatformKnobs } from "../src/services/config";
 
 const [, , cmd, ...args] = process.argv;
 
@@ -123,23 +123,37 @@ async function main() {
     }
 
     case "config": {
-      // perillas anti-bots (decisión del dueño: lanzar abierto, prender con datos)
-      // acepta "config set <perilla> <valor>" y "config <perilla> <valor>"
+      // perillas (anti-bots + comisiones) — acepta "config set <k> <v> [<k> <v>…]"
+      // y "config <k> <v>". Varios pares se setean JUNTOS (las comisiones se
+      // mueven de a pares para respetar la invariante normal == flash).
       const cfgArgs = args[0] === "set" ? args.slice(1) : args;
-      const [key, value] = cfgArgs;
-      if (key && value !== undefined) {
-        const valid = ["bondPts", "createsPerDay", "relayBudgetMilli"];
-        if (!valid.includes(key)) throw new Error(`Perillas válidas: ${valid.join(", ")}`);
-        const n = Math.trunc(Number(value));
-        if (!Number.isFinite(n) || n < 0) throw new Error("El valor debe ser un entero ≥ 0");
-        await setKnob(key as keyof PlatformKnobs, n);
-        console.log(`${key} = ${n} (rige en ≤15 s, sin redeploy)`);
+      if (cfgArgs.length >= 2) {
+        const valid = [
+          "bondPts", "createsPerDay", "relayBudgetMilli",
+          "platformBps", "creatorBps", "flashPlatformBps", "flashCreatorBps",
+        ];
+        if (cfgArgs.length % 2 !== 0) throw new Error("Uso: config set <perilla> <valor> [<perilla> <valor> …]");
+        const patch: Partial<PlatformKnobs> = {};
+        for (let i = 0; i < cfgArgs.length; i += 2) {
+          const key = cfgArgs[i], value = cfgArgs[i + 1];
+          if (!valid.includes(key)) throw new Error(`Perillas válidas: ${valid.join(", ")}`);
+          const n = Math.trunc(Number(value));
+          if (!Number.isFinite(n) || n < 0) throw new Error("El valor debe ser un entero ≥ 0");
+          patch[key as keyof PlatformKnobs] = n;
+        }
+        await setKnobs(patch);
+        for (const [k, v] of Object.entries(patch)) console.log(`${k} = ${v}`);
+        console.log("(rige en ≤15 s, sin redeploy — los duelos abiertos conservan sus bps)");
       } else {
         const k = await getKnobs();
         console.log("PERILLAS DE PLATAFORMA (0 = apagada)");
         console.log(`  bondPts          = ${k.bondPts}  (garantía en pts para crear un duelo)`);
         console.log(`  createsPerDay    = ${k.createsPerDay}  (cupo de creaciones por cuenta/día)`);
         console.log(`  relayBudgetMilli = ${k.relayBudgetMilli}  (FUSIBLE: miliPOL/hora de gas patrocinado)`);
+        console.log(`  COMISIONES (se congelan por duelo al crear; total normal == total flash, techo 20%)`);
+        console.log(`  platformBps      = ${k.platformBps}  ·  creatorBps      = ${k.creatorBps}   (común: ${(k.platformBps + k.creatorBps) / 100}% total)`);
+        console.log(`  flashPlatformBps = ${k.flashPlatformBps}  ·  flashCreatorBps = ${k.flashCreatorBps}   (relámpago: ${(k.flashPlatformBps + k.flashCreatorBps) / 100}% total)`);
+        console.log(`  OJO: esto rige los duelos de PUNTOS. Los usdc salen de la factory on-chain (setFees) — mantener en paridad.`);
         const hour = await prisma.relaySpend.aggregate({
           _sum: { costWei: true }, where: { createdAt: { gte: new Date(Date.now() - 3600_000) } },
         });

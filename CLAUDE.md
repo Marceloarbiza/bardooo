@@ -143,6 +143,26 @@ antes los duelos pts modo-completo abandonados quedaban abiertos para siempre.
    relámpagos lo sigue manejando el backend/indexer (la válvula on-chain de 4 h
    es el respaldo trustless).
 
+### DECISIONES DEL DUEÑO (2026-07-10) — timing y comisiones
+1. **SIN buffer de 5 min**: en la guiada se apuesta hasta la fecha/hora EXACTA
+   del comienzo del evento (`closeTime = eventTime`). El buffer se eliminó de
+   theme.ts/Create.jsx; el server sigue validando cierre en el futuro y
+   resolución después del cierre. (El riesgo "hora anunciada ≠ hora real" se
+   asumió a cambio del volumen de último minuto.)
+2. **Comisiones en puntos = PERILLAS de DB** (PlatformConfig, `pnpm admin
+   config`): `platformBps/creatorBps/flashPlatformBps/flashCreatorBps`
+   (defaults 300/700 y 100/900). MISMAS invariantes que la factory: total
+   normal == total flash, techo 20%; se setean juntas
+   (`config set platformBps 0 creatorBps 1000 flashPlatformBps 0 flashCreatorBps 1000`).
+   **Cada duelo CONGELA sus bps al nacer** (columna Bet.platformBps nueva) —
+   cambiar la perilla jamás toca pozos abiertos. El indexer lee los bps REALES
+   del contrato Bet al materializar duelos usdc (y sus gemelos). El front
+   muestra los bps de /config (Create/QuickModal), nunca hardcodea.
+   Plan del dueño: lanzar con plataforma 0% (0/1000 + 0/1000) — "no tomo
+   ganancia" — como argumento de masividad; PENDIENTE validar con abogado que
+   no cobrar ≠ automáticamente legal (facilitar juego puede estar regulado
+   igual). Paridad on-chain: la factory tiene setFees onlyOwner (cast send).
+
 ## Estado actual (qué está hecho y qué falta)
 
 HECHO:
@@ -336,8 +356,8 @@ Faucet Amoy: https://faucet.polygon.technology (pedir POL para la wallet de depl
   UX: botón de dos pasos (Aprobar → Apostar) o approve exacto por apuesta.
 - **Unidades:** todo en unidades de 6 decimales (1 USDC = 1_000_000). El front
   convierte con `parseUnits(x, 6)` / `formatUnits(x, 6)`.
-- **La regla de los 5 minutos** (cierre = inicio del evento − 5 min) vive en el
-  FRONTEND, no en el contrato. Mantenerla al armar el `Config`.
+- **La regla de los 5 minutos fue ELIMINADA (2026-07-10)**: la guiada cierra en
+  la hora EXACTA del evento (`closeTime = eventTime`, decisión del dueño).
 - **Eventos para refrescar UI:** `BetCreated` (factory), `BetPlaced`, `Resolved`,
   `Cancelled`, `Claimed`, `Refunded`, `FeesWithdrawn` (Bet). Usar `watchContractEvent`.
 

@@ -1,7 +1,6 @@
 import { createPublicClient, http, getAddress, type Log } from "viem";
 import { AMOY, BET_FACTORY_ABI, BET_ABI } from "@bardooo/core";
 import { prisma } from "./db";
-import { CREATOR_BPS } from "./settlement";
 import { systemResolveBet, systemCancelBet } from "./services/bets";
 
 /*  INDEXER (fase 3): la cadena es la fuente de verdad de los duelos usdc;
@@ -76,6 +75,13 @@ export async function onChainBetCreated(betAddr: string, creatorAddr: string) {
   })) as readonly [string, number, number, bigint, bigint, bigint, bigint, bigint, bigint, boolean];
   const [description, , stakeMode, fixedAmount, maxStake, minStake, maxBettors, closeTime, resolveTime, isFlash] = cfg;
 
+  // los bps CONGELADOS en el contrato (la factory los inyectó al crear):
+  // la DB refleja la economía real de la cadena, no una constante local
+  const [chainPlatformBps, chainCreatorBps] = (await Promise.all([
+    client.readContract({ address: chainAddress, abi: BET_ABI, functionName: "platformFeeBps" }),
+    client.readContract({ address: chainAddress, abi: BET_ABI, functionName: "creatorFeeBps" }),
+  ])) as [number, number];
+
   const creator = await getOrCreateUserByWallet(creatorAddr);
 
   const usdcBet = await prisma.bet.create({
@@ -88,7 +94,8 @@ export async function onChainBetCreated(betAddr: string, creatorAddr: string) {
       minStake: Number(minStake),
       maxStake: Number(maxStake),
       maxBettors: Number(maxBettors),
-      creatorBps: CREATOR_BPS, // total 10% para la UI; el split real vive on-chain
+      platformBps: Number(chainPlatformBps),
+      creatorBps: Number(chainCreatorBps),
       closeTime: new Date(Number(closeTime) * 1000), // ¡el contrato usa segundos!
       resolveTime: new Date(Number(resolveTime) * 1000),
       relampago: isFlash,
@@ -116,7 +123,9 @@ export async function onChainBetCreated(betAddr: string, creatorAddr: string) {
         minStake: Math.max(1, Math.round(Number(minStake) / 1e6)),
         maxStake: Math.round(Number(maxStake) / 1e6),
         maxBettors: Number(maxBettors),
-        creatorBps: CREATOR_BPS,
+        // el gemelo pts hereda la economía EXACTA del duelo on-chain
+        platformBps: Number(chainPlatformBps),
+        creatorBps: Number(chainCreatorBps),
         closeTime: new Date(closeMs),
         resolveTime: new Date(Number(resolveTime) * 1000),
         relampago: isFlash,

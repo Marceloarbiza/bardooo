@@ -8,15 +8,15 @@
 
 import { commission, payoutFor, feeSplit } from "@bardooo/core";
 
-/*  Comisiones FIJAS (decisión del dueño 2026-07-05), sin slider del creador:
-    normal = 3% plataforma + 7% creador; relámpago = 1% + 9%. Total al
-    apostador SIEMPRE 10%. Espejo de BetFactory (fase 3 las lee de la factory). */
+/*  Comisiones: el usuario no las elige (decisión 2026-07-05) pero desde el
+    2026-07-10 son PERILLAS de plataforma (PlatformConfig, `pnpm admin config`)
+    y cada duelo CONGELA sus bps al nacer — igual que la factory on-chain.
+    Estos valores son solo los DEFAULTS de las perillas (normal 3+7, flash 1+9). */
 export const PLATFORM_BPS = 300;
 export const CREATOR_BPS = 700;
-export const FLASH_REBATE_BPS = 200; // en flash la plataforma cede 2pp: share efectivo 100
-export const FLASH_PLATFORM_BPS = PLATFORM_BPS - FLASH_REBATE_BPS; // 100
-export const FLASH_CREATOR_BPS = CREATOR_BPS + FLASH_REBATE_BPS; // 900
-export const MAX_CREATOR_BPS = 1000; // techo legado (ya no hay input del creador)
+export const FLASH_PLATFORM_BPS = 100;
+export const FLASH_CREATOR_BPS = 900;
+export const MAX_TOTAL_BPS = 2000; // techo 20% (espejo del require de la factory)
 
 export interface StakeIn {
   userId: string;
@@ -42,9 +42,10 @@ function pools2(stakes: StakeIn[]): [bigint, bigint] {
 }
 
 /** Qué produce resolver un duelo. Anulación automática sin contraparte
- *  (espejo de Bet.resolve + _hasContest del contrato). */
+ *  (espejo de Bet.resolve + _hasContest del contrato). Los bps vienen
+ *  CONGELADOS del propio duelo (el flash ya nace con su split 1/9). */
 export function computeResolution(
-  bet: { creatorBps: number; relampago: boolean },
+  bet: { platformBps: number; creatorBps: number },
   stakes: StakeIn[],
   winningOption: number
 ): Resolution {
@@ -58,13 +59,10 @@ export function computeResolution(
     };
   }
 
-  const feeBps = PLATFORM_BPS + bet.creatorBps;
+  const feeBps = bet.platformBps + bet.creatorBps;
   const total = pools[0] + pools[1];
   const comm = commission(total, pools[winningOption], feeBps);
-
-  // bonus relámpago: cambia SOLO el split, jamás el total que sale del pozo
-  const platformShare = bet.relampago ? PLATFORM_BPS - FLASH_REBATE_BPS : PLATFORM_BPS;
-  const { platformCut, creatorCut } = feeSplit(comm, platformShare, feeBps);
+  const { platformCut, creatorCut } = feeSplit(comm, bet.platformBps, feeBps);
 
   const payouts = stakes
     .filter((s) => s.option === winningOption)

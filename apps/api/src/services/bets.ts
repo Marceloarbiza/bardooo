@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma, type Tx } from "../db";
 import { ApiError, errors } from "../errors";
-import { computeResolution, computeClaimPayout, PLATFORM_BPS, CREATOR_BPS } from "../settlement";
+import { computeResolution, computeClaimPayout } from "../settlement";
 import { accreditIfPending } from "./referrals";
 import { getKnobs } from "./config";
 
@@ -77,7 +77,8 @@ export function serializeBet(b: BetWithAll, forUserId?: string, now = Date.now()
     maxStake: b.maxStake / unit,
     maxBettors: b.maxBettors,
     creatorBps: b.creatorBps,
-    feeBps: PLATFORM_BPS + b.creatorBps, // total que sale del pozo (10% fijo)
+    platformBps: b.platformBps,
+    feeBps: b.platformBps + b.creatorBps, // total que sale del pozo (congelado al crear)
     closeTime: b.closeTime.getTime(),
     resolveTime: b.resolveTime.getTime(),
     status: deriveStatus(b, now),
@@ -205,7 +206,11 @@ export async function createBet(userId: string, input: CreateBetInput) {
   if (code && code.length > 12) throw new ApiError(400, "BAD_CODE", "El código va hasta 12 caracteres");
 
   await assertCreateQuota(userId); // perilla de cupo (0 = sin límite)
-  const { bondPts } = await getKnobs(); // perilla de garantía (0 = sin garantía)
+  const knobs = await getKnobs(); // garantía + comisiones vigentes
+  const { bondPts } = knobs;
+  // los bps se CONGELAN acá (como la factory): el flash nace con su split 1/9
+  const platformBps = relampago ? knobs.flashPlatformBps : knobs.platformBps;
+  const creatorBps = relampago ? knobs.flashCreatorBps : knobs.creatorBps;
 
   const bet = await prisma.$transaction(async (tx) => {
     // la garantía se retiene ATOMICAMENTE con la creación (si la perilla está prendida)
@@ -228,7 +233,8 @@ export async function createBet(userId: string, input: CreateBetInput) {
         minStake,
         maxStake,
         maxBettors: Math.max(0, Math.trunc(input.maxBettors ?? 0)),
-        creatorBps: CREATOR_BPS, // fijo: 7% (el bonus flash lo aplica el split al resolver)
+        platformBps,
+        creatorBps,
         bondAmount: bondPts,
         closeTime: new Date(closeTime),
         resolveTime: new Date(resolveTime),
@@ -355,7 +361,7 @@ export async function resolveBet(userId: string, betId: number, option: number) 
     }
 
     const r = computeResolution(
-      { creatorBps: b.creatorBps, relampago: b.relampago },
+      { platformBps: b.platformBps, creatorBps: b.creatorBps },
       b.stakes.map((s) => ({ userId: s.userId, option: s.option, amount: s.amount })),
       option
     );
@@ -408,7 +414,7 @@ export async function claimBet(userId: string, betId: number) {
       b.stakes.map((s) => ({ userId: s.userId, option: s.option, amount: s.amount })),
       b.winningOption,
       userId,
-      PLATFORM_BPS + b.creatorBps
+      b.platformBps + b.creatorBps
     );
     if (pay <= 0) throw errors.nothingToClaim();
 
@@ -495,7 +501,7 @@ export async function systemResolveBet(betId: number, option: number) {
     if (!b || b.status !== "open") return null; // ya liquidado: idempotente
 
     const r = computeResolution(
-      { creatorBps: b.creatorBps, relampago: b.relampago },
+      { platformBps: b.platformBps, creatorBps: b.creatorBps },
       b.stakes.map((s) => ({ userId: s.userId, option: s.option, amount: s.amount })),
       option
     );

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronLeft, X } from "lucide-react";
-import { C, CLOSE_OFFSET_MIN } from "../theme";
+import { C } from "../theme";
 import { fmtDateTime, toLocalInput } from "../lib/format";
 import { DateField, Label, NumField, Row, Seg } from "./ui/bits";
 import { ghost } from "./ui/styles";
@@ -13,7 +13,13 @@ const DURATIONS = [
   { label: "Configurable", v: "custom" },
 ];
 
-export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
+export function Create({ onCreate, onBack, walletOn, bondPts = 0, fees }) {
+  // comisiones vigentes: vienen de /config (perillas del server), jamás hardcodeadas
+  const platformPct = (fees?.platformBps ?? 300) / 100;
+  const creatorPct = (fees?.creatorBps ?? 700) / 100;
+  const flashCreatorPct = (fees?.flashCreatorBps ?? 900) / 100;
+  const totalPct = platformPct + creatorPct;
+  const pct = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}%`;
   const [isPrivate, setIsPrivate] = useState(false);
   const [code, setCode] = useState("");
   const [question, setQuestion] = useState("");
@@ -36,7 +42,8 @@ export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
     ? Math.max(1, Number(customQty) || 0) * unitMins[customUnit]
     : Number(durChoice);
   const eventTime = Date.parse(eventAt);
-  const closeTime = isNaN(eventTime) ? NaN : eventTime - CLOSE_OFFSET_MIN * 60000;
+  // (2026-07-10) sin buffer: se apuesta hasta la hora EXACTA del comienzo del evento
+  const closeTime = eventTime;
   const resolveTime = timeMode === "manual" ? Date.parse(resolveAt) : (isNaN(eventTime) ? NaN : eventTime + durM * 60000);
 
   const timeOk = !isNaN(closeTime) && closeTime > Date.now() && !isNaN(resolveTime) && resolveTime > eventTime;
@@ -130,13 +137,13 @@ export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
       )}
 
       <div style={{ background: C.bg2, border: `1px solid ${C.line}`, borderRadius: 14, padding: 14, margin: "6px 0 18px" }}>
-        <Row k="Las apuestas cierran" v={fmtDateTime(closeTime)} note={`${CLOSE_OFFSET_MIN} min antes`} />
+        <Row k="Las apuestas cierran" v={fmtDateTime(closeTime)} note="cuando arranca el evento" />
         <div style={{ height: 1, background: C.line, margin: "10px 0" }} />
         <Row k="Resultado a partir de" v={fmtDateTime(resolveTime)} col={C.gold} />
         {!timeOk && (
           <div style={{ color: C.no, fontSize: 12, marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
             <X size={14} /> {isNaN(eventTime) ? "Elegí fecha y hora del evento" :
-              closeTime <= Date.now() ? "El evento es muy pronto (las apuestas cierran 5 min antes) — para algo que arranca ya, usá el Relámpago ⚡" :
+              closeTime <= Date.now() ? "El evento ya empezó — para algo que arranca ya, usá el Relámpago ⚡" :
               "El resultado tiene que ser después del evento"}
           </div>
         )}
@@ -147,10 +154,10 @@ export function Create({ onCreate, onBack, walletOn, bondPts = 0 }) {
         border: `1px solid ${C.gold}33`, borderRadius: 14, padding: "13px 16px", marginBottom: 20,
       }}>
         <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 3 }}>
-          Tu comisión: <span style={{ color: C.gold }}>7%</span> del pozo
+          Tu comisión: <span style={{ color: C.gold }}>{pct(creatorPct)}</span> del pozo
         </div>
         <div style={{ color: C.faint, fontSize: 11.5, lineHeight: 1.5 }}>
-          Comisión total fija del 10% (7% vos + 3% BARDOOO). Sale del pozo y nunca hace que un ganador cobre menos de lo que puso. En relámpagos tu parte sube al 9%.
+          Comisión total del {pct(totalPct)} ({pct(creatorPct)} vos{platformPct > 0 ? ` + ${pct(platformPct)} BARDOOO` : " — BARDOOO no cobra nada"}). Sale del pozo y nunca hace que un ganador cobre menos de lo que puso.{flashCreatorPct !== creatorPct && <> En relámpagos tu parte {flashCreatorPct > creatorPct ? "sube" : "cambia"} al {pct(flashCreatorPct)}.</>}
           {bondPts > 0 && <> Al lanzar se retienen <b style={{ color: C.gold }}>{bondPts} pts de garantía</b>: te vuelven al cargar el resultado.</>}
         </div>
       </div>

@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma } from "../src/db";
-import { setKnob, getKnobs } from "../src/services/config";
+import { setKnob, setKnobs, getKnobs } from "../src/services/config";
 import { createBet, resolveBet, expireOverdueRelampagos, placeBet } from "../src/services/bets";
 import { assertRelayBudget } from "../src/relay";
 
@@ -38,6 +38,7 @@ afterAll(async () => {
   await setKnob("bondPts", 0);
   await setKnob("createsPerDay", 0);
   await setKnob("relayBudgetMilli", 150);
+  await setKnobs({ platformBps: 300, creatorBps: 700, flashPlatformBps: 100, flashCreatorBps: 900 });
   await prisma.$disconnect();
 });
 
@@ -144,6 +145,66 @@ describe("cupo de creaciones por día", () => {
     await expect(createBet(u.id, fullInput("¿La tercera rebota como debe?")))
       .rejects.toMatchObject({ code: "CREATE_LIMIT" });
     await setKnob("createsPerDay", 0);
+  });
+});
+
+describe("comisiones como perillas (decisión del dueño 2026-07-10)", () => {
+  it("defaults: 300/700 común y 100/900 flash — y cada duelo los CONGELA al nacer", async () => {
+    const k = await getKnobs();
+    expect([k.platformBps, k.creatorBps, k.flashPlatformBps, k.flashCreatorBps]).toEqual([300, 700, 100, 900]);
+
+    const u = await mkUser("congelador");
+    const normal = await createBet(u.id, fullInput("¿El común congela 300/700 al nacer?"));
+    expect([normal.platformBps, normal.creatorBps, normal.feeBps]).toEqual([300, 700, 1000]);
+
+    const flash = await createBet(u.id, {
+      question: "¿El flash congela 100/900 al nacer?", currency: "pts", stakeMode: "free",
+      minStake: 5, relampago: true, windowMin: 5,
+    });
+    expect([flash.platformBps, flash.creatorBps, flash.feeBps]).toEqual([100, 900, 1000]);
+  });
+
+  it("mover UNA sola perilla de comisión rompe la invariante normal == flash", async () => {
+    await expect(setKnob("platformBps", 0)).rejects.toThrow(/normal.*flash/);
+  });
+
+  it("techo 20% (espejo del FeeTooHigh de la factory)", async () => {
+    await expect(
+      setKnobs({ platformBps: 1500, creatorBps: 1000, flashPlatformBps: 1300, flashCreatorBps: 1200 })
+    ).rejects.toThrow(/20%/);
+  });
+
+  it("plataforma 0%: seteo atómico, snapshot nuevo, y los duelos viejos NO cambian", async () => {
+    const u = await mkUser("fundador");
+    const viejo = await createBet(u.id, fullInput("¿El duelo viejo conserva sus bps?"));
+
+    // modo lanzamiento: BARDOOO no cobra nada, el creador se lleva todo el 10%
+    await setKnobs({ platformBps: 0, creatorBps: 1000, flashPlatformBps: 0, flashCreatorBps: 1000 });
+
+    const nuevo = await createBet(u.id, fullInput("¿El duelo nuevo congela 0/1000?"));
+    expect([nuevo.platformBps, nuevo.creatorBps, nuevo.feeBps]).toEqual([0, 1000, 1000]);
+
+    const viejoDb = await prisma.bet.findUniqueOrThrow({ where: { id: viejo.id } });
+    expect([viejoDb.platformBps, viejoDb.creatorBps]).toEqual([300, 700]); // intocable
+
+    // resolver el duelo 0/1000: la plataforma no se lleva NADA, el creador todo
+    const a = await mkUser("apostadorX");
+    const c = await mkUser("apostadorY");
+    await placeBet(a.id, nuevo.id, 1, 20);
+    await placeBet(c.id, nuevo.id, 0, 60);
+    await prisma.bet.update({
+      where: { id: nuevo.id },
+      data: { closeTime: new Date(Date.now() - 2000), resolveTime: new Date(Date.now() - 1000) },
+    });
+    const r = await resolveBet(u.id, nuevo.id, 1);
+    expect(r.cancelled).toBe(false);
+    if (!r.cancelled) {
+      // total 80, fee 10% = 8 → plataforma 0, creador 8
+      expect(r.platformCut).toBe(0);
+      expect(r.creatorCut).toBe(8);
+    }
+
+    await setKnobs({ platformBps: 300, creatorBps: 700, flashPlatformBps: 100, flashCreatorBps: 900 });
   });
 });
 

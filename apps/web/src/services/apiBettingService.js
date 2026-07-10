@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, ApiFail } from "./api";
-import { PLATFORM_BPS } from "../theme";
 
 /* ===========================================================================
    ApiBettingService — la implementación REAL de BettingService (fase 2).
@@ -21,7 +20,11 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   const [me, setMe] = useState(null);
   const [flightsLeft, setFlightsLeft] = useState(0);
   const [gaslessOn, setGaslessOn] = useState(false);
-  const [knobs, setKnobs] = useState({ bondPts: 0, createsPerDay: 0 }); // perillas anti-bots
+  // perillas del server: anti-bots + comisiones vigentes (para los copys de crear)
+  const [knobs, setKnobs] = useState({
+    bondPts: 0, createsPerDay: 0,
+    platformBps: 300, creatorBps: 700, flashPlatformBps: 100, flashCreatorBps: 900,
+  });
   const [referral, setReferral] = useState({ invitedBy: null, pending: 0, accredited: 0 });
   const [onLiveHit, setOnLiveHit] = useState(null); // callback para el blip de actividad ajena
 
@@ -272,14 +275,19 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
     }
   }, [call]);
 
-  /* config de plataforma: en fase 3 esto viene de la factory; hoy validamos
-     que el server y el front estén de acuerdo (trampa conocida de CLAUDE.md) */
+  /* config de plataforma: las comisiones son PERILLAS del server (2026-07-10)
+     — el front nunca hardcodea bps (trampa conocida de CLAUDE.md), los muestra */
   useEffect(() => {
     if (!enabled) return;
     apiFetch("/config").then((c) => {
-      if (c.platformBps !== PLATFORM_BPS)
-        console.error(`PLATFORM_BPS desincronizado: front ${PLATFORM_BPS} vs server ${c.platformBps}`);
-      setKnobs({ bondPts: c.bondPts ?? 0, createsPerDay: c.createsPerDay ?? 0 });
+      setKnobs({
+        bondPts: c.bondPts ?? 0,
+        createsPerDay: c.createsPerDay ?? 0,
+        platformBps: c.platformBps ?? 300,
+        creatorBps: c.creatorBps ?? 700,
+        flashPlatformBps: c.flashPlatformBps ?? 100,
+        flashCreatorBps: c.flashCreatorBps ?? 900,
+      });
     }).catch(() => {});
     apiFetch("/relay/status").then((r) => setGaslessOn(!!r.enabled)).catch(() => {});
   }, [enabled]);

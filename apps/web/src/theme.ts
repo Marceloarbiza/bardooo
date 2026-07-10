@@ -10,7 +10,7 @@ export const C = {
   gold: "#FFC53D", goldDeep: "#4A3506",
 } as const;
 
-export const PLATFORM_BPS = 300;      // en la app real: factory.platformFeeBps()
-export const FLASH_REBATE_BPS = 200;  // en relampagos BARDOOO cobra solo 1%: cede 2pp al creador (total al apostador: igual)
+export const PLATFORM_BPS = 300;      // FALLBACK del mock: la app real lee /config (perillas)
+export const FLASH_REBATE_BPS = 200;  // solo lo usa el mock de referencia
 export const MAX_CREATOR_BPS = 1000;  // techo 10%
-export const CLOSE_OFFSET_MIN = 5;    // las apuestas cierran 5 min antes del evento
+// (2026-07-10) el buffer de 5 min se ELIMINÓ: la guiada cierra en la hora exacta del evento

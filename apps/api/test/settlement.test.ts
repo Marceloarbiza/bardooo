@@ -6,7 +6,7 @@
     (comisión topeada, mulDiv floor), el dust absorbe el truncamiento.          */
 
 import { describe, it, expect } from "vitest";
-import { computeResolution, computeClaimPayout, PLATFORM_BPS, FLASH_REBATE_BPS } from "../src/settlement";
+import { computeResolution, computeClaimPayout } from "../src/settlement";
 
 const NO = 0 as const;
 const SI = 1 as const;
@@ -19,7 +19,7 @@ const stakesPareja = [
 ];
 
 describe("caso pareja en puntos enteros (espejo de test_EvenCase)", () => {
-  const r = computeResolution({ creatorBps: 700, relampago: false }, stakesPareja, SI);
+  const r = computeResolution({ platformBps: 300, creatorBps: 700 }, stakesPareja, SI);
 
   it("resuelve (hay contienda)", () => {
     expect(r.kind).toBe("resolved");
@@ -66,7 +66,7 @@ describe("caso pareja en micro-unidades (números EXACTOS del contrato)", () => 
     { userId: "bob", option: SI, amount: 50_000_000 },
     { userId: "carol", option: NO, amount: 60_000_000 },
   ];
-  const r = computeResolution({ creatorBps: 700, relampago: false }, stakes, SI);
+  const r = computeResolution({ platformBps: 300, creatorBps: 700 }, stakes, SI);
 
   it("33_428_571 / 83_571_428, dust 1, split 3_900_000 / 9_100_000", () => {
     if (r.kind !== "resolved") throw new Error("no resolvió");
@@ -86,7 +86,7 @@ describe("caso despareja (espejo de test_LopsidedCase)", () => {
     { userId: "alice", option: SI, amount: 120 },
     { userId: "carol", option: NO, amount: 10 },
   ];
-  const r = computeResolution({ creatorBps: 700, relampago: false }, stakes, SI);
+  const r = computeResolution({ platformBps: 300, creatorBps: 700 }, stakes, SI);
 
   it("comisión topeada al pozo perdedor: 10, no 13", () => {
     if (r.kind !== "resolved") throw new Error("no resolvió");
@@ -101,8 +101,9 @@ describe("caso despareja (espejo de test_LopsidedCase)", () => {
 });
 
 describe("bonus relámpago (REGLA INVIOLABLE: el total no cambia)", () => {
-  const r = computeResolution({ creatorBps: 700, relampago: true }, stakesPareja, SI);
-  const rNormal = computeResolution({ creatorBps: 700, relampago: false }, stakesPareja, SI);
+  // el flash ya NACE con su split congelado (1/9): mismo total que el normal
+  const r = computeResolution({ platformBps: 100, creatorBps: 900 }, stakesPareja, SI);
+  const rNormal = computeResolution({ platformBps: 300, creatorBps: 700 }, stakesPareja, SI);
 
   it("misma comisión total y mismos payouts que el no-relámpago", () => {
     if (r.kind !== "resolved" || rNormal.kind !== "resolved") throw new Error("no resolvió");
@@ -111,7 +112,7 @@ describe("bonus relámpago (REGLA INVIOLABLE: el total no cambia)", () => {
     expect(r.dust).toBe(rNormal.dust);
   });
 
-  it("la plataforma cede 2pp: share efectivo 1% (300-200 de 1000 bps)", () => {
+  it("split flash: plataforma 1% de 1000 bps", () => {
     if (r.kind !== "resolved") throw new Error("no resolvió");
     // comm 13, platformShare 100/1000 → mulDiv floor = 1; creador 12
     expect(r.platformCut).toBe(1);
@@ -125,7 +126,7 @@ describe("sin contraparte → anulación con devolución completa", () => {
     { userId: "alice", option: SI, amount: 20 },
     { userId: "bob", option: SI, amount: 50 },
   ];
-  const r = computeResolution({ creatorBps: 700, relampago: false }, stakes, SI);
+  const r = computeResolution({ platformBps: 300, creatorBps: 700 }, stakes, SI);
 
   it("cancela y devuelve TODO, sin comisión", () => {
     expect(r.kind).toBe("cancelled");
@@ -137,14 +138,14 @@ describe("sin contraparte → anulación con devolución completa", () => {
   });
 
   it("también cancela si gana la opción vacía o pierde la vacía (da igual el lado)", () => {
-    const r2 = computeResolution({ creatorBps: 700, relampago: false }, stakes, NO);
+    const r2 = computeResolution({ platformBps: 300, creatorBps: 700 }, stakes, NO);
     expect(r2.kind).toBe("cancelled");
   });
 });
 
 describe("computeClaimPayout (pull individual, mismo número que la resolución)", () => {
   it("coincide con el payout calculado en la resolución", () => {
-    const r = computeResolution({ creatorBps: 700, relampago: false }, stakesPareja, SI);
+    const r = computeResolution({ platformBps: 300, creatorBps: 700 }, stakesPareja, SI);
     if (r.kind !== "resolved") throw new Error("no resolvió");
     for (const p of r.payouts) {
       expect(computeClaimPayout(stakesPareja, SI, p.userId, 1000)).toBe(p.amount);
@@ -169,8 +170,8 @@ describe("invariantes con montos arbitrarios (fuzz determinístico)", () => {
         ...Array.from({ length: nB }, (_, k) => ({ userId: `b${k}`, option: NO, amount: 5 + Math.floor(rnd() * 5000) })),
       ];
       const creatorBps = Math.floor(rnd() * 1001);
-      const relampago = rnd() < 0.5;
-      const r = computeResolution({ creatorBps, relampago }, stakes, SI);
+      const platformBps = Math.floor(rnd() * 501);
+      const r = computeResolution({ platformBps, creatorBps }, stakes, SI);
       if (r.kind !== "resolved") throw new Error("debería resolver");
 
       const total = stakes.reduce((a, x) => a + x.amount, 0);
