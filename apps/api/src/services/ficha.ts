@@ -53,8 +53,10 @@ export async function endFlight(userId: string, flightId: string, score: number)
       await tx.pointsLedger.create({
         data: { userId, delta: prize, reason: "ficha", ref: `flight:${flight.id}` },
       });
-      await accreditIfPending(tx, userId); // primer vuelo con premio también acredita al referidor
     }
+    // decisión del dueño (2026-07-10): ENTRAR A JUGAR ya acredita al referidor,
+    // aunque el vuelo termine en 0 (estrellarse también es jugar)
+    await accreditIfPending(tx, userId);
     const used = await tx.flight.count({ where: { userId, day: dayKey() } });
     return { prize, remaining: Math.max(0, MAX_FLIGHTS_PER_DAY - used) };
   });

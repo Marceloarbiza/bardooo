@@ -326,6 +326,18 @@ describe("referidos (+25 recién con la primera acción real)", () => {
     expect(after - before).toBe(25);
   });
 
+  it("un vuelo de La Ficha (aunque sea con 0 caños) también acredita", async () => {
+    const ana = (await api("GET", "/me", "ana")).body.user;
+    await api("POST", "/referrals/use", "torpe", { code: ana.refCode });
+    const before = (await api("GET", "/me", "ana")).body.user.points;
+
+    const s = await api("POST", "/ficha/start", "torpe");
+    await api("POST", "/ficha/end", "torpe", { flightId: s.body.flightId, score: 0 }); // se estrelló al toque
+
+    const after = (await api("GET", "/me", "ana")).body.user.points;
+    expect(after - before).toBe(25); // entrar a jugar YA cuenta (decisión del dueño)
+  });
+
   it("no se acredita dos veces ni permite auto-referido", async () => {
     const diego = (await api("GET", "/me", "diego")).body.user;
     const before = diego.points;
