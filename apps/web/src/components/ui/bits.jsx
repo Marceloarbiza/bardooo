@@ -100,7 +100,7 @@ export function Seg({ on, col, onClick, children, grow, pad }) {
 }
 
 /* Stepper estilo control remoto: numero heroe arriba (quieto), pildora de botones abajo */
-export function Stepper({ label, value, steps, min, max, onChange, color = C.gold, prefix, suffix }) {
+export function Stepper({ label, value, steps, min, max, onChange, color = C.gold, prefix, suffix, zeroText }) {
   const clamp = (v) => Math.min(max ?? Infinity, Math.max(min ?? 0, v));
   const all = [...steps].sort((a, b) => a - b);
   const pct = min != null && max != null ? ((value - min) / (max - min)) * 100 : null;
@@ -117,9 +117,13 @@ export function Stepper({ label, value, steps, min, max, onChange, color = C.gol
         fontFamily: "Syne", fontWeight: 800, fontSize: 38, color, lineHeight: 1,
         textShadow: `0 0 26px ${color}50`, marginBottom: pct != null ? 10 : 12,
       }}>
-        {prefix && <span style={{ fontSize: 22, marginRight: 2 }}>{prefix}</span>}
-        {Number(value).toLocaleString("es-UY")}
-        {suffix && <span style={{ fontSize: 15, color: C.dim, marginLeft: 8, fontWeight: 700, letterSpacing: 1.5 }}>{suffix}</span>}
+        {value === 0 && zeroText ? (
+          <span style={{ fontSize: 24 }}>{zeroText}</span>
+        ) : (<>
+          {prefix && <span style={{ fontSize: 22, marginRight: 2 }}>{prefix}</span>}
+          {Number(value).toLocaleString("es-UY")}
+          {suffix && <span style={{ fontSize: 15, color: C.dim, marginLeft: 8, fontWeight: 700, letterSpacing: 1.5 }}>{suffix}</span>}
+        </>)}
       </div>
       {pct != null && (
         <div style={{ height: 4, borderRadius: 4, background: `${C.bg}cc`, margin: "0 26px 12px", overflow: "hidden" }}>
