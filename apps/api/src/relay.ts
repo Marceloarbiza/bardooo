@@ -41,6 +41,31 @@ function selectorsOf(abi: readonly any[], names: string[]): Set<string> {
 const factorySelectors = selectorsOf(BET_FACTORY_ABI, FACTORY_FNS);
 const betSelectors = selectorsOf(BET_ABI, BET_FNS);
 
+/* ---- nafta del relayer ----
+   Sin POL suficiente, eth_estimateGas revienta con un error críptico del RPC y
+   el usuario veía un 500 a mitad del flujo (bug real: balance 0.0117 POL vs
+   ~0.075 que reserva un createBet). Acá el estado se chequea ANTES y se
+   degrada al mismo camino del fusible: 503 RELAY_BUSY → el front cae solo a
+   tx directa. Cache 60 s para no pegarle al RPC en cada request.            */
+const MAX_FEE_WEI = 25_100_000_000n; // mismo maxFeePerGas que usa relayExecute
+export const RELAY_STATUS_MIN_WEI = 30_000_000_000_000_000n; // 0.03 POL: alcanza para las acciones baratas
+let fuelCache: { at: number; wei: bigint } | null = null;
+
+export async function relayerFuelWei(): Promise<bigint | null> {
+  if (fuelCache && Date.now() - fuelCache.at < 60_000) return fuelCache.wei;
+  try {
+    const { account, pub } = clients();
+    const wei = await pub.getBalance({ address: account.address });
+    fuelCache = { at: Date.now(), wei };
+    return wei;
+  } catch {
+    return null; // RPC caído: no apagar el gasless de más (que decida la tx)
+  }
+}
+
+const outOfFuel = () =>
+  new ApiError(503, "RELAY_BUSY", "El modo sin gas está recargando: probá en un rato (o jugá con tu propia wallet)");
+
 export function relayEnabled() {
   return !!process.env.RELAYER_PRIVATE_KEY && !!AMOY.forwarder;
 }
@@ -176,26 +201,42 @@ export async function relayExecute(req: ForwardRequestIn, userId: string) {
     await assertCreateQuota(userId);
   }
 
+  // ¿alcanza la nafta para ESTA acción? (el estimateGas reserva gas × maxFee)
+  const fuel = await relayerFuelWei();
+  if (fuel !== null && fuel < BigInt(req.gas) * MAX_FEE_WEI + 10n ** 15n) throw outOfFuel();
+
   await simulateInnerCall(req); // revert del contrato → 400 con motivo humano
 
   const { wallet, pub } = clients();
-  const hash = await wallet.writeContract({
+  let hash: `0x${string}`;
+  try {
+    hash = await wallet.writeContract({
     address: AMOY.forwarder as `0x${string}`,
     abi: FORWARDER_ABI,
     functionName: "execute",
     // gas al piso de Amoy (25 gwei): cada wei de más sale del POL del relayer
     maxPriorityFeePerGas: 25_000_000_000n,
     maxFeePerGas: 25_100_000_000n,
-    args: [{
-      from: getAddress(req.from),
-      to: getAddress(req.to),
-      value: 0n,
-      gas: BigInt(req.gas),
-      deadline: Number(req.deadline),
-      data: req.data as `0x${string}`,
-      signature: req.signature as `0x${string}`,
-    }],
-  });
+      args: [{
+        from: getAddress(req.from),
+        to: getAddress(req.to),
+        value: 0n,
+        gas: BigInt(req.gas),
+        deadline: Number(req.deadline),
+        data: req.data as `0x${string}`,
+        signature: req.signature as `0x${string}`,
+      }],
+    });
+  } catch (e: any) {
+    // fondos insuficientes disfrazados por el RPC (dRPC los devuelve como
+    // "Missing or invalid parameters" en el estimateGas) → mismo 503 amable
+    const msg = String(e?.message ?? "");
+    if (/insufficient funds|exceeds the balance|Missing or invalid parameters/i.test(msg)) {
+      fuelCache = null; // que el próximo /relay/status lo refleje ya
+      throw outOfFuel();
+    }
+    throw e;
+  }
   const receipt = await pub.waitForTransactionReceipt({ hash });
 
   // registrar el gasto REAL: alimenta el fusible y la métrica de costo por usuario

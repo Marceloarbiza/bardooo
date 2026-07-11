@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { z } from "zod";
 import { getAddress, verifyMessage } from "viem";
-import { relayEnabled, relayExecute, faucetMint } from "./relay";
+import { relayEnabled, relayExecute, relayerFuelWei, RELAY_STATUS_MIN_WEI, faucetMint } from "./relay";
 import { getKnobs } from "./services/config";
 import { prisma } from "./db";
 import { ApiError, errors } from "./errors";
@@ -271,7 +271,13 @@ export async function buildServer(opts: ServerOpts) {
   /* --------------------- gasless (fase 4): relay + faucet --------------------- */
 
   // el front pregunta si el modo sin gas está prendido
-  app.get("/relay/status", async () => ({ enabled: relayEnabled() }));
+  // enabled = hay relayer Y le queda nafta: sin POL el front arranca directo
+  // en modo tx-propia en vez de estrellarse a mitad de una firma
+  app.get("/relay/status", async () => {
+    if (!relayEnabled()) return { enabled: false };
+    const fuel = await relayerFuelWei();
+    return { enabled: fuel === null || fuel >= RELAY_STATUS_MIN_WEI };
+  });
 
   // meta-transacción firmada → la plataforma paga el gas (candados en relay.ts)
   app.post("/relay", { config: { rateLimit: { max: 30, timeWindow: "1 hour" } } }, async (req) => {
