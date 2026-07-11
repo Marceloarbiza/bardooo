@@ -13,8 +13,14 @@ import { ghost } from "./ui/styles";
 /* =============================== FEED =============================== */
 /* Dos arenas separadas (pedido del dueño): los duelos de PUNTOS y los de
    PLATA no se mezclan en el listado — igual que sus pozos.               */
-export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy }) {
-  const [arena, setArena] = useState("usdc"); // la de plata primero: es LA arena
+export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, walletOn, onQuick, onWallet }) {
+  // la de plata primero ES la arena (pedido del dueño)… salvo que esté vacía
+  // y el usuario no tenga wallet: a ese lo recibe la arena de puntos con vida.
+  const [choice, setChoice] = useState(null); // null = decidir solo
+  const openBy = (cur) => bets.some((b) =>
+    !b.isPrivate && (b.status === "open" || b.status === "locked") && b.currency === cur
+  );
+  const arena = choice ?? (walletOn || openBy("usdc") || !openBy("pts") ? "usdc" : "pts");
   const open = bets.filter((b) =>
     !b.isPrivate && (b.status === "open" || b.status === "locked") && b.currency === arena
   );
@@ -79,20 +85,35 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy }) {
 
       {/* el switch de arenas: pills discretas, plata primero */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        <ArenaTab on={arena === "usdc"} col={C.gold} onClick={() => setArena("usdc")}
+        <ArenaTab on={arena === "usdc"} col={C.gold} onClick={() => setChoice("usdc")}
           icon={<CircleDot size={11} />} label="De plata" />
-        <ArenaTab on={arena === "pts"} col={C.si} onClick={() => setArena("pts")}
+        <ArenaTab on={arena === "pts"} col={C.si} onClick={() => setChoice("pts")}
           icon={<Zap size={11} fill={arena === "pts" ? C.bg : C.si} />} label="De puntos" />
       </div>
 
       {open.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px 20px", color: C.faint }}>
           <Sparkles size={28} style={{ marginBottom: 10 }} />
-          <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 18 }}>
             {arena === "pts"
-              ? "No hay duelos de puntos abiertos. ¡Lanzá el primero con el rayo!"
-              : "No hay duelos de plata abiertos. Activá tu wallet y lanzá el primero."}
+              ? "No hay duelos de puntos abiertos. El primero lo lanzás vos."
+              : walletOn
+                ? "No hay duelos de plata abiertos. El primero lo lanzás vos."
+                : "No hay duelos de plata abiertos. Activá tu wallet y lanzá el primero."}
           </div>
+          {arena === "usdc" && !walletOn ? (
+            <button onClick={onWallet} className="press" style={{
+              border: "none", borderRadius: 16, padding: "14px 26px", cursor: "pointer",
+              fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.bg,
+              background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 10px 28px ${C.gold}33`,
+            }}>Activar mi wallet</button>
+          ) : (
+            <button onClick={onQuick} className="press" style={{
+              border: "none", borderRadius: 16, padding: "14px 26px", cursor: "pointer",
+              fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.bg,
+              background: `linear-gradient(135deg, ${C.gold}, ${C.no})`, boxShadow: `0 10px 28px ${C.noGlow}`,
+            }}>⚡ Lanzar el primero</button>
+          )}
         </div>
       ) : open.map((b, i) => <BetCard key={b.id} b={b} now={now} onOpen={onOpen} delay={i * 70} />)}
     </div>

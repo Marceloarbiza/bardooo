@@ -55,6 +55,7 @@ export default function App() {
   const [showLink, setShowLink] = useState(false);
   const [linkPrefill, setLinkPrefill] = useState(null); // deep link que pide código
   const [pendingBetId, setPendingBetId] = useState(null);
+  const [pendingPreview, setPendingPreview] = useState(null); // el duelo del deep link, ANTES del login
   const [popup, setPopup] = useState(null); // modales notorios de referidos
 
   const { soundOn, play, toggleSound } = useSound();
@@ -92,6 +93,20 @@ export default function App() {
     if (bet) setPendingBetId(Number(bet[1]));
     if (bet || inv || q) window.history.replaceState({}, "", "/");
   }, []);
+
+  /* el invitado por link ve A QUÉ lo invitaron antes de loguearse: la pregunta
+     real convierte mucho mejor que la pantalla genérica (GET /bets/:id es
+     público; si la privada pide código, mostramos el gate sin la pregunta) */
+  useEffect(() => {
+    if (pendingBetId == null || authenticated) return;
+    let alive = true;
+    import("./services/api").then(({ apiFetch }) =>
+      apiFetch(`/bets/${pendingBetId}`)
+        .then((d) => { if (alive) setPendingPreview(d.bet); })
+        .catch((e) => { if (alive && e?.code === "NEEDS_CODE") setPendingPreview({ locked: true }); })
+    );
+    return () => { alive = false; };
+  }, [pendingBetId, authenticated]);
 
   const deepHandled = useRef(false);
   useEffect(() => {
@@ -381,7 +396,7 @@ export default function App() {
     };
   }, [connected, soundOn, musicOn]);
 
-  const ticker = activity.map((a) => ({ u: a.u, amt: a.amt, side: a.side, cur: a.cur }));
+  const ticker = activity.map((a) => ({ type: a.type, u: a.u, amt: a.amt, side: a.side, cur: a.cur }));
   const active = bets.find((b) => b.id === activeId) || null;
 
   const splash = (
@@ -402,7 +417,7 @@ export default function App() {
         {!ready ? (
           splash
         ) : !authenticated ? (
-          <Connect onConnect={connect} now={now} />
+          <Connect onConnect={connect} now={now} invite={pendingPreview} />
         ) : !me ? (
           splash
         ) : (
@@ -413,6 +428,7 @@ export default function App() {
               {view === "feed" && (
                 <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
                   invitedBy={svc.referral?.invitedBy}
+                  walletOn={walletOn} onQuick={() => setShowQuick(true)} onWallet={() => setShowWallet(true)}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
               {view === "game" && (

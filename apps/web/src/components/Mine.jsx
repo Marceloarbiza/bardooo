@@ -1,4 +1,4 @@
-import { ArrowRight, Hourglass, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, Hourglass, Share2, Sparkles, TrendingUp, Trophy, Users } from "lucide-react";
 import { C } from "../theme";
 import { amt } from "../lib/format";
 import { BetCard } from "./Arena";
@@ -11,6 +11,10 @@ export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName,
   const created = bets.filter((b) => b.creator.mine);
   const pending = created.filter((b) => b.status === "locked");
   const playing = mine.filter((b) => b.status === "open" || b.status === "locked");
+  // pull-payment: los premios no cobrados son plata del usuario PARADA — se gritan
+  const unclaimed = mine.filter((b) =>
+    b.status === "resolved" && b.winningOption != null && b.myStake[b.winningOption] > 0 && !b.claimed
+  );
   return (
     <div style={{ paddingTop: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: C.faint, marginBottom: 2 }}>TU RINCÓN</div>
@@ -43,6 +47,24 @@ export function Mine({ bets, now, onOpen, earned, onInvite, profile, onSaveName,
         </div>
         <ArrowRight size={16} color={C.si} />
       </div>
+
+      {unclaimed.length > 0 && (
+        <div onClick={() => onOpen(unclaimed[0].id)} className="press" style={{
+          display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+          background: `linear-gradient(90deg, ${C.gold}2a, transparent)`,
+          border: `1px solid ${C.gold}`, borderRadius: 16, padding: "13px 14px", marginBottom: 14,
+          boxShadow: `0 8px 26px ${C.gold}22`,
+        }}>
+          <Trophy size={18} color={C.gold} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: C.gold }}>
+              {unclaimed.length === 1 ? "¡Ganaste! Tenés un premio sin cobrar" : `¡Tenés ${unclaimed.length} premios sin cobrar!`}
+            </div>
+            <div style={{ color: C.dim, fontSize: 12 }}>Tocá y cobralo: ya es tuyo</div>
+          </div>
+          <ArrowRight size={16} color={C.gold} />
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div onClick={() => onOpen(pending[0].id)} className="press" style={{

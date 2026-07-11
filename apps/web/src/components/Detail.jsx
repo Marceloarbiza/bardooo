@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, CircleDot, Lock, Share2, Trophy, Users } from "lucide-react";
+import { ChevronLeft, CircleDot, Clock, Lock, Share2, ShieldCheck, Trophy, Users } from "lucide-react";
 import { C, PLATFORM_BPS } from "../theme";
-import { amt } from "../lib/format";
+import { amt, fmtDateTime } from "../lib/format";
 import { payoutFor, multFor } from "../lib/math";
 import { fmtMult } from "../lib/format";
 import { Avatar } from "./ui/Identicon";
@@ -151,9 +151,9 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
           <Banner color={C.no} text="Apuesta anulada — se devuelve lo apostado." />
         )
       ) : canResolve ? (
-        <ResolvePanel b={b} onResolve={onResolve} />
+        <ResolvePanel b={b} now={now} onResolve={onResolve} />
       ) : closed ? (
-        <Banner color={C.gold} text="Apuestas cerradas. El creador carga el resultado cuando termina el evento." />
+        <WaitPanel b={b} />
       ) : (
         <BetPanel b={b} option={option} setOption={setOption} amount={amount} setAmount={setAmount}
           est={est} fee={fee} onBet={onBet} lockedSide={lockedSide} fire={fire} />
@@ -249,10 +249,41 @@ function Choice({ on, col, label, glow, onClick, disabled, sub }) {
   );
 }
 
-function ResolvePanel({ b, onResolve }) {
+/* La espera del apostador: cuándo llega el resultado Y la garantía de que su
+   plata no queda rehén (anulación automática) — el miedo #1 de una apuesta
+   P2P, respondido donde nace. */
+function WaitPanel({ b }) {
+  const guaranteeAt = b.deadline ?? b.resolveTime + 4 * 3600 * 1000; // relámpago: +30 min; común: gracia de 4 h
+  return (
+    <div style={{ background: C.bg2, border: `1px solid ${C.gold}44`, borderRadius: 18, padding: "16px 16px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: C.gold }}>
+        <Clock size={15} />
+        <span style={{ fontWeight: 700, fontSize: 13.5 }}>Resultado a partir de {fmtDateTime(b.resolveTime)}</span>
+      </div>
+      <p style={{ color: C.dim, fontSize: 13, margin: "0 0 10px", lineHeight: 1.5 }}>
+        Apuestas cerradas. El creador carga el resultado cuando termina el evento y ahí cobran los ganadores.
+      </p>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 7, color: C.si, fontSize: 12, lineHeight: 1.5 }}>
+        <ShieldCheck size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>Tu plata nunca queda rehén: si no hay resultado antes de las {fmtDateTime(guaranteeAt)}, el duelo se anula solo y todos recuperan lo suyo.</span>
+      </div>
+    </div>
+  );
+}
+
+function ResolvePanel({ b, now, onResolve }) {
   const [confirm, setConfirm] = useState(null); // null | 0 | 1
   const col = confirm === 1 ? C.si : C.no;
   const lado = confirm === 1 ? "SÍ" : "NO";
+  // el server rechaza resolver antes de resolveTime (tooEarly): acá mostramos
+  // el countdown en vez de botones que van a fallar
+  const waitMs = b.resolveTime - now;
+  const tooEarly = waitMs > 0;
+  const cd = () => {
+    const s = Math.ceil(waitMs / 1000), m = Math.floor(s / 60);
+    if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
+    return m > 0 ? `${m}:${String(s % 60).padStart(2, "0")}` : `${s}s`;
+  };
   return (
     <>
       <div style={{ background: `linear-gradient(160deg, ${C.gold}14, ${C.bg2})`, border: `1px solid ${C.gold}55`, borderRadius: 20, padding: 18 }}>
@@ -260,11 +291,15 @@ function ResolvePanel({ b, onResolve }) {
           <Trophy size={16} /> <span style={{ fontWeight: 700, fontSize: 14 }}>Sos el creador</span>
         </div>
         <p style={{ color: C.dim, fontSize: 13, margin: "0 0 14px", lineHeight: 1.5 }}>
-          La apuesta cerró. Cargá el resultado real: los ganadores cobran y vos recibís tu comisión.
+          {tooEarly
+            ? <>La apuesta cerró. Podés cargar el resultado <b style={{ color: C.gold }}>en {cd()}</b> (cuando arranque a definirse el evento).</>
+            : "La apuesta cerró. Cargá el resultado real: los ganadores cobran y vos recibís tu comisión."}
         </p>
-        <div style={{ display: "flex", gap: 12 }}>
-          <button onClick={() => setConfirm(1)} className="press" style={resolveBtn(C.si)}>Ganó el SÍ</button>
-          <button onClick={() => setConfirm(0)} className="press" style={resolveBtn(C.no)}>Ganó el NO</button>
+        <div style={{ display: "flex", gap: 12, opacity: tooEarly ? 0.4 : 1 }}>
+          <button disabled={tooEarly} onClick={() => !tooEarly && setConfirm(1)} className="press"
+            style={{ ...resolveBtn(C.si), cursor: tooEarly ? "not-allowed" : "pointer" }}>Ganó el SÍ</button>
+          <button disabled={tooEarly} onClick={() => !tooEarly && setConfirm(0)} className="press"
+            style={{ ...resolveBtn(C.no), cursor: tooEarly ? "not-allowed" : "pointer" }}>Ganó el NO</button>
         </div>
       </div>
 

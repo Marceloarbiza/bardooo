@@ -10,7 +10,8 @@ export function BottomNav({ view, setView, onQuick }) {
   );
   return (
     <div style={{
-      position: "fixed", bottom: 12, left: 0, right: 0, maxWidth: 408, margin: "0 auto",
+      // env(safe-area-inset-bottom): que el home indicator del iPhone no tape la barra (PWA instalada)
+      position: "fixed", bottom: "calc(12px + env(safe-area-inset-bottom, 0px))", left: 0, right: 0, maxWidth: 408, margin: "0 auto",
       background: `${C.bg2}f0`, backdropFilter: "blur(16px)", border: `1px solid ${C.line}`,
       borderRadius: 24, display: "flex", alignItems: "center", padding: "6px 12px",
       boxShadow: "0 14px 40px rgba(0,0,0,.55)", zIndex: 30,

@@ -162,7 +162,7 @@ export function Toast({ t }) {
   const col = t.kind === "err" ? C.no : t.kind === "win" ? C.gold : C.si;
   return (
     <div key={t.id} className="toast" style={{
-      position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)", zIndex: 50,
+      position: "fixed", bottom: "calc(96px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", zIndex: 50,
       maxWidth: 400, width: "calc(100% - 40px)", background: C.bg3, border: `1px solid ${col}`,
       borderRadius: 14, padding: "13px 16px", display: "flex", alignItems: "center", gap: 10,
       boxShadow: "0 10px 30px rgba(0,0,0,.5)",
