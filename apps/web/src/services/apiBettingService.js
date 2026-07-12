@@ -18,6 +18,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   const [bets, setBets] = useState([]);
   const [activity, setActivity] = useState([]);
   const [me, setMe] = useState(null);
+  const [loaded, setLoaded] = useState(false); // primer /bets ya llegó (skeletons)
   const [flightsLeft, setFlightsLeft] = useState(0);
   const [gaslessOn, setGaslessOn] = useState(false);
   // perillas del server: anti-bots + comisiones vigentes (para los copys de crear)
@@ -95,8 +96,9 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
       } catch {} // si dejó de ser accesible, queda la última vista
     }
     mergeBets(b.bets);
-    setActivity(a.activity.filter((x) => x.type === "bet_placed"));
-    setMe(m.user);
+    setLoaded(true); // primer fetch listo: se apagan los skeletons
+    setActivity(a.activity); // el Ticker ya sabe el verbo de cada tipo de evento
+    setMe({ ...m.user, commissions: m.commissions ?? 0 });
     setFlightsLeft(m.flightsLeft);
     if (m.referral) setReferral(m.referral);
     return m.user;
@@ -113,7 +115,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
 
   const refreshMe = useCallback(async () => {
     const m = await call("/me");
-    setMe(m.user);
+    setMe({ ...m.user, commissions: m.commissions ?? 0 });
     setFlightsLeft(m.flightsLeft);
     if (m.referral) setReferral(m.referral);
     return m.user;
@@ -302,7 +304,7 @@ export function useApiBettingService({ getToken, nameHint, enabled }) {
   }, [call]);
 
   return {
-    bets, activity, me, flightsLeft, gaslessOn, knobs, referral, relay, faucetServer,
+    bets, activity, me, loaded, flightsLeft, gaslessOn, knobs, referral, relay, faucetServer,
     placeBet, createBet, resolve, claim, refund,
     openByLink, fichaStart, fichaEnd, updateName, useReferral, linkWallet, track,
     refreshAll, refreshMe,

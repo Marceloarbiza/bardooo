@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Lock, ShieldCheck, Users, Wallet } from "lucide-react";
 import { C } from "../theme";
 import { multFor } from "../lib/math";
@@ -14,6 +15,14 @@ export function Connect({ onConnect, now, invite }) {
   const wob = (now / 1000) % 40;
   const demo = [95 + wob, 140 - wob];
   const inv = invite && !invite.locked ? invite : null;
+  // el redirect de OAuth tarda 1-3 s: sin feedback la gente re-toca ("no pasa nada")
+  const [busy, setBusy] = useState(null);
+  const tap = (method) => {
+    if (busy) return;
+    setBusy(method);
+    Promise.resolve(onConnect(method)).finally(() => setTimeout(() => setBusy(null), 5000));
+  };
+  const busyStyle = (method) => (busy && busy !== method ? { opacity: 0.5, pointerEvents: "none" } : {});
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", padding: 24, position: "relative" }}>
       <div style={{ position: "relative", marginTop: 36 }}><Logo size={28} /></div>
@@ -80,32 +89,36 @@ export function Connect({ onConnect, now, invite }) {
 
         {/* google/twitter por REDIRECT (sin popups: funciona en la PWA instalada);
             email abre el modal de Privy (no necesita popup) */}
-        <button onClick={() => onConnect("google")} className="press" style={{
+        <button onClick={() => tap("google")} className="press" style={{
           width: "100%", border: "none", borderRadius: 18, padding: "18px",
           fontFamily: "Syne", fontWeight: 800, fontSize: 17, color: C.bg, cursor: "pointer",
           background: "#FFFFFF",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          ...busyStyle("google"),
         }}>
-          <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 17 }}>G</span> Continuar con Google
+          {busy === "google" ? "Abriendo…" : <><span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 17 }}>G</span> Continuar con Google</>}
         </button>
         {/* wallet al mismo nivel que Google: el público también es cripto */}
-        <button onClick={() => onConnect("wallet")} className="press" style={{
+        <button onClick={() => tap("wallet")} className="press" style={{
           width: "100%", border: "none", borderRadius: 18, padding: "18px", marginTop: 10,
           fontFamily: "Syne", fontWeight: 800, fontSize: 17, color: C.bg, cursor: "pointer",
           background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 10px 30px ${C.gold}33`,
           display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          ...busyStyle("wallet"),
         }}>
-          <Wallet size={18} /> Entrar con wallet
+          <Wallet size={18} /> {busy === "wallet" ? "Abriendo…" : "Entrar con wallet"}
         </button>
-        <button onClick={() => onConnect("email")} className="press" style={{
+        <button onClick={() => tap("email")} className="press" style={{
           width: "100%", borderRadius: 18, padding: "16px", marginTop: 10, cursor: "pointer",
           fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.text,
           background: "transparent", border: `1.5px solid ${C.line}`,
-        }}>Entrar con email</button>
-        <button onClick={() => onConnect("twitter")} className="press" style={{
+          ...busyStyle("email"),
+        }}>{busy === "email" ? "Abriendo…" : "Entrar con email"}</button>
+        <button onClick={() => tap("twitter")} className="press" style={{
           ...ghost, width: "100%", justifyContent: "center", marginTop: 12, fontSize: 13,
+          ...busyStyle("twitter"),
         }}>
-          Continuar con X (Twitter)
+          {busy === "twitter" ? "Abriendo…" : "Continuar con X (Twitter)"}
         </button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 12, color: C.faint, fontSize: 12 }}>
           <ShieldCheck size={14} /> Jugás gratis con puntos · la wallet, cuando vos quieras

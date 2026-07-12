@@ -125,7 +125,7 @@ export async function buildServer(opts: ServerOpts) {
     // estado de referidos, para que el +25 diferido sea VISIBLE y no magia:
     // - invitedBy: me invitaron y todavía no jugué (banner "jugá y le regalás 25")
     // - pending/accredited: mis invitados esperando su primera jugada / ya pagados
-    const [pendingIn, pending, accredited, lastPending, lastAccredited] = await Promise.all([
+    const [pendingIn, pending, accredited, lastPending, lastAccredited, commAgg] = await Promise.all([
       prisma.referral.findFirst({
         where: { referredId: u.id, accredited: false },
         include: { referrer: { select: { handle: true } } },
@@ -142,9 +142,16 @@ export async function buildServer(opts: ServerOpts) {
         orderBy: { createdAt: "desc" },
         include: { referred: { select: { handle: true } } },
       }),
+      // comisiones HISTÓRICAS del ledger: el front las mostraba de un contador
+      // de sesión que volvía a 0 al recargar (stat que mentía)
+      prisma.pointsLedger.aggregate({
+        _sum: { delta: true },
+        where: { userId: u.id, reason: "comision" },
+      }),
     ]);
     return {
       user: serializeUser(u),
+      commissions: commAgg._sum.delta ?? 0,
       flightsLeft: await flightsLeft(u.id),
       referral: {
         invitedBy: pendingIn?.referrer.handle ?? null,

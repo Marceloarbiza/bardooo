@@ -5,12 +5,12 @@ import { Seg, Stepper } from "./ui/bits";
 import { ghost } from "./ui/styles";
 
 /* ======================= RELÁMPAGO (bottom sheet) ======================= */
-export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, fees }) {
+export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, fees, initialQuestion }) {
   // comisiones vigentes del relámpago (perillas del server, /config)
   const fPlat = (fees?.flashPlatformBps ?? 100) / 100;
   const fCre = (fees?.flashCreatorBps ?? 900) / 100;
   const pct = (n) => `${Number.isInteger(n) ? n : n.toFixed(2)}%`;
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(initialQuestion ?? ""); // revancha: llega prellenada
   const [stakeMode, setStakeMode] = useState("free");
   const [fixedAmount, setFixedAmount] = useState(20);
   const [windowMin, setWindowMin] = useState(15); // 5 a 60, de a 5

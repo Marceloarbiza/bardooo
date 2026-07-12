@@ -48,8 +48,8 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [now, setNow] = useState(Date.now());
   const [toast, setToast] = useState(null);
-  const [earned, setEarned] = useState(0); // comisiones cobradas en esta sesión (pts)
   const [burst, setBurst] = useState(false);
+  const [quickPrefill, setQuickPrefill] = useState(null); // revancha: pregunta prellenada
   const [showWallet, setShowWallet] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showLink, setShowLink] = useState(false);
@@ -184,9 +184,13 @@ export default function App() {
     return () => clearInterval(t);
   }, [connected]);
 
+  /* errores duran más (traen instrucciones) y todo toast se cierra al tocar;
+     el ref evita que el timer de un toast viejo borre al nuevo antes de tiempo */
+  const toastTimer = useRef(null);
   const fire = (msg, kind = "ok") => {
     setToast({ msg, kind, id: Math.random() });
-    setTimeout(() => setToast(null), 2600);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), kind === "err" ? 4500 : 2600);
   };
 
   /* blip suave cuando OTRO usuario mueve un pozo (reemplaza a la multitud fake) */
@@ -267,9 +271,9 @@ export default function App() {
     const r = await svc.resolve(id, option);
     if (!r.ok) return fire(r.error, "err");
     if (r.cancelled) return fire("Sin contraparte: apuesta anulada, se devuelve todo", "err");
-    setEarned((x) => x + r.creatorCut);
     play("win");
     fire(`Resultado cargado · tu comisión: ${amt(r.currency, r.creatorCut)}`, "win");
+    svc.refreshMe().catch(() => {}); // el stat de comisiones sale del ledger
   };
 
   const claim = async (id) => {
@@ -427,7 +431,7 @@ export default function App() {
             <div style={{ padding: "0 16px 130px", position: "relative" }}>
               {view === "feed" && (
                 <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
-                  invitedBy={svc.referral?.invitedBy}
+                  invitedBy={svc.referral?.invitedBy} loading={!svc.loaded}
                   walletOn={walletOn} onQuick={() => setShowQuick(true)} onWallet={() => setShowWallet(true)}
                   onOpen={(id) => { setActiveId(id); setView("detail"); }} />
               )}
@@ -438,6 +442,7 @@ export default function App() {
               {view === "detail" && active && (
                 <Detail b={active} now={now} fire={fire} refCode={refSlug} track={svc.track}
                   onBack={() => setView("feed")}
+                  onRevenge={(q) => { setQuickPrefill(q); setShowQuick(true); }}
                   onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
               )}
               {view === "create" && (
@@ -445,7 +450,7 @@ export default function App() {
                   walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs} profile={profile} now={now} />
               )}
               {view === "mine" && (
-                <Mine bets={bets} now={now} earned={earned} onInvite={invite}
+                <Mine bets={bets} now={now} earned={me?.commissions ?? 0} onInvite={invite}
                   profile={profile} onSaveName={saveName} onLogout={logout}
                   walletOn={walletOn} walletAddr={chain.address ?? ""} fire={fire}
                   refStats={svc.referral}
@@ -466,15 +471,16 @@ export default function App() {
             )}
             {showQuick && (
               <QuickModal walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs}
-                onClose={() => setShowQuick(false)}
-                onCreate={(f) => { setShowQuick(false); createBet(f); }}
+                initialQuestion={quickPrefill}
+                onClose={() => { setShowQuick(false); setQuickPrefill(null); }}
+                onCreate={(f) => { setShowQuick(false); setQuickPrefill(null); createBet(f); }}
                 goFull={() => { setShowQuick(false); setView("create"); }} />
             )}
           </>
         )}
         {popup && <PopModal {...popup} onClose={() => setPopup(null)} />}
         {burst && <Burst />}
-        {toast && <Toast t={toast} />}
+        {toast && <Toast t={toast} onClose={() => setToast(null)} />}
       </div>
     </div>
   );

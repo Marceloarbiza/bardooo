@@ -12,7 +12,7 @@ import { Amt } from "./ui/animated";
 import { ghost, resolveBtn } from "./ui/styles";
 
 /* =============================== DETAIL =============================== */
-export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fire, refCode, track }) {
+export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, onRevenge, fire, refCode, track }) {
   const lockedSide = b.myStake[1] > 0 ? 1 : b.myStake[0] > 0 ? 0 : null;
   const [option, setOption] = useState(lockedSide ?? 1);
   const [amount, setAmount] = useState(b.stakeMode === "fixed" ? b.fixedAmount : b.minStake);
@@ -35,12 +35,12 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
   const myPay = b.status === "resolved"
     ? payoutFor(b.pools, b.winningOption, b.myStake[b.winningOption], fee) : 0;
 
-  const share = () => {
+  const share = (customTxt) => {
     // TODO link compartido lleva tu código de referido (CLAUDE.md): un duelo
     // concreto convierte mejor que la invitación genérica, misma recompensa
     const ref = refCode ? `?i=${refCode}` : "";
     const url = `${window.location.origin}/bet/${b.id}${ref}`;
-    const txt = `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá${b.code ? ` (código: ${b.code})` : ""}:`;
+    const txt = customTxt ?? `🔥 ${b.question} — ¿SÍ o NO? Entrá a BARDOOO y jugá${b.code ? ` (código: ${b.code})` : ""}:`;
     // en el teléfono: share nativo del sistema (maneja texto+link como corresponde)
     if (navigator.share) {
       navigator.share({ text: txt, url }).then(() => track?.("share")).catch(() => {});
@@ -57,7 +57,7 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
     <div style={{ paddingTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <button onClick={onBack} className="press" style={ghost}><ChevronLeft size={18} /> Volver</button>
-        <button onClick={share} className="press" style={{ ...ghost, gap: 6 }}><Share2 size={15} /> Compartir</button>
+        <button onClick={() => share()} className="press" style={{ ...ghost, gap: 6 }}><Share2 size={15} /> Compartir</button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 12px" }}>
@@ -127,7 +127,7 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
               }}>código: {b.code}</span>
             )}
           </div>
-          <button onClick={share} className="press" style={{
+          <button onClick={() => share()} className="press" style={{
             width: "100%", border: "none", borderRadius: 14, padding: "14px", cursor: "pointer",
             fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.bg,
             background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 8px 24px ${C.gold}33`,
@@ -139,7 +139,8 @@ export function Detail({ b, now, onBack, onBet, onResolve, onClaim, onRefund, fi
       )}
 
       {b.status === "resolved" ? (
-        <Resolved b={b} myPay={myPay} onClaim={onClaim} />
+        <Resolved b={b} myPay={myPay} onClaim={onClaim} onRevenge={onRevenge}
+          onShareWin={() => share(`🏆 Gané ${amt(b.currency, myPay)} en BARDOOO — "${b.question}". ¿Te animás a la próxima?`)} />
       ) : b.status === "cancelled" ? (
         (b.myStake[0] + b.myStake[1] > 0 && !b.claimed) ? (
           <button onClick={() => onRefund(b.id)} className="press" style={{
@@ -198,13 +199,27 @@ function BetPanel({ b, option, setOption, amount, setAmount, est, fee, onBet, lo
       )}
 
       <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
         background: `linear-gradient(90deg, ${option === 1 ? C.si : C.no}10, transparent)`,
         border: `1px solid ${(option === 1 ? C.si : C.no)}33`,
         borderRadius: 14, padding: "13px 16px", marginBottom: 12,
       }}>
-        <span style={{ color: C.dim, fontSize: 13 }}>Si ganás, cobrás ≈</span>
-        <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 24, color: option === 1 ? C.si : C.no }}>{amt(b.currency, est)}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: C.dim, fontSize: 13 }}>Si ganás, cobrás ≈</span>
+          <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 24, color: option === 1 ? C.si : C.no }}>{amt(b.currency, est)}</span>
+        </div>
+        {/* el número que decide la apuesta es la GANANCIA, no el bruto */}
+        {(() => {
+          const staked = b.myStake[option] + (Number(amount) || 0);
+          const gain = est - staked;
+          if (!(est > 0) || gain < 0) return null;
+          return (
+            <div style={{ textAlign: "right", color: C.dim, fontSize: 11.5, marginTop: 3 }}>
+              {gain > 0
+                ? <>tus {amt(b.currency, staked)} + <b style={{ color: option === 1 ? C.si : C.no }}>{amt(b.currency, gain)} de ganancia</b></>
+                : "recuperás justo tu apuesta"}
+            </div>
+          );
+        })()}
       </div>
       <p style={{ color: C.faint, fontSize: 11.5, margin: "0 0 14px", lineHeight: 1.5 }}>
         Estimado: el pago final depende de cómo cierren los pozos. Comisión total {(fee / 100).toFixed(0)}% (creador + plataforma), sale del pozo y nunca cobrás menos de lo que pusiste.
@@ -338,10 +353,11 @@ function ResolvePanel({ b, now, onResolve }) {
   );
 }
 
-function Resolved({ b, myPay, onClaim }) {
+function Resolved({ b, myPay, onClaim, onShareWin, onRevenge }) {
   const won = b.winningOption;
   const col = won === 1 ? C.si : C.no;
   const iWon = b.myStake[won] > 0;
+  const iPlayed = b.myStake[0] + b.myStake[1] > 0;
   return (
     <div>
       <div style={{
@@ -354,9 +370,18 @@ function Resolved({ b, myPay, onClaim }) {
         </div>
       </div>
       {iWon ? (
-        b.claimed ? (
+        b.claimed ? (<>
           <Banner color={C.si} text={`Ya cobraste ${amt(b.currency, myPay)}. ¡Bien jugado!`} />
-        ) : (
+          {/* el pico emocional ES el momento de compartir */}
+          <button onClick={onShareWin} className="press" style={{
+            width: "100%", border: "none", borderRadius: 16, padding: "15px", cursor: "pointer", marginTop: 12,
+            fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.bg,
+            background: `linear-gradient(90deg, ${C.gold}, #ffdd8f)`, boxShadow: `0 8px 24px ${C.gold}33`,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}>
+            <Share2 size={16} /> Contá tu victoria
+          </button>
+        </>) : (
           <button onClick={() => onClaim(b.id)} className="press" style={{
             width: "100%", border: "none", borderRadius: 18, padding: "18px", cursor: "pointer",
             fontFamily: "Syne", fontWeight: 800, fontSize: 18, color: C.bg,
@@ -366,9 +391,16 @@ function Resolved({ b, myPay, onClaim }) {
             <Trophy size={20} /> Cobrar {amt(b.currency, myPay)}
           </button>
         )
-      ) : (
-        <Banner color={C.faint} text="Esta vez no fue. La revancha se crea en un minuto." />
-      )}
+      ) : (<>
+        <Banner color={C.faint} text={iPlayed ? "Esta vez no fue. La revancha se crea en un minuto." : "Este duelo ya se definió."} />
+        {iPlayed && onRevenge && (
+          <button onClick={() => onRevenge(b.question)} className="press" style={{
+            width: "100%", borderRadius: 16, padding: "15px", cursor: "pointer", marginTop: 12,
+            fontFamily: "Syne", fontWeight: 800, fontSize: 15, color: C.gold,
+            background: "transparent", border: `2px solid ${C.gold}`,
+          }}>⚡ Pedir revancha</button>
+        )}
+      </>)}
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { ghost } from "./ui/styles";
 /* =============================== FEED =============================== */
 /* Dos arenas separadas (pedido del dueño): los duelos de PUNTOS y los de
    PLATA no se mezclan en el listado — igual que sus pozos.               */
-export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, walletOn, onQuick, onWallet }) {
+export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, walletOn, onQuick, onWallet, loading }) {
   // la de plata primero ES la arena (pedido del dueño)… salvo que esté vacía
   // y el usuario no tenga wallet: a ese lo recibe la arena de puntos con vida.
   const [choice, setChoice] = useState(null); // null = decidir solo
@@ -91,7 +91,10 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, wall
           icon={<Zap size={11} fill={arena === "pts" ? C.bg : C.si} />} label="De puntos" />
       </div>
 
-      {open.length === 0 ? (
+      {loading && open.length === 0 ? (
+        // primer load: cartas fantasma en vez de un "no hay duelos" mentiroso
+        [0, 1, 2].map((i) => <SkeletonCard key={i} delay={i * 90} />)
+      ) : open.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px 20px", color: C.faint }}>
           <Sparkles size={28} style={{ marginBottom: 10 }} />
           <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 18 }}>
@@ -116,6 +119,29 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, wall
           )}
         </div>
       ) : open.map((b, i) => <BetCard key={b.id} b={b} now={now} onOpen={onOpen} delay={i * 70} />)}
+    </div>
+  );
+}
+
+function SkeletonCard({ delay = 0 }) {
+  const bar = (w, h = 12) => (
+    <div style={{ width: w, height: h, borderRadius: 8, background: C.bg3 }} />
+  );
+  return (
+    <div className="rise" style={{
+      position: "relative", overflow: "hidden",
+      background: `linear-gradient(160deg, ${C.bg2}, ${C.bg2}dd)`,
+      border: `1px solid ${C.line}`, borderRadius: 22, padding: 16, marginBottom: 14,
+      animationDelay: `${delay}ms`,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 13 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: C.bg3 }} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{bar(90)}{bar(60, 9)}</div>
+      </div>
+      {bar("85%", 16)}
+      <div style={{ height: 10 }} />
+      <div style={{ height: 34, borderRadius: 13, background: C.bg3 }} />
+      <div className="shine" style={{ position: "absolute", inset: 0, pointerEvents: "none" }} />
     </div>
   );
 }
