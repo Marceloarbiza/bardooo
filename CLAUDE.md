@@ -436,6 +436,32 @@ Faucet Amoy: https://faucet.polygon.technology (pedir POL para la wallet de depl
   es la única acción sin vuelta atrás del creador. Complementa (no reemplaza) la
   ventana de disputa del backlog.
 
+### AUDITORÍA PRE-MAINNET (2026-07-13) — fixes en código, FALTA REDEPLOY
+Dos auditorías (agente aegis ×2) + verificación manual con PoC. Núcleo
+económico SÓLIDO (solvencia, "nunca cobrás menos que tu stake", reentrancy,
+doble-cobro, fees fijas, ERC-2771: todo correcto). Hallazgos arreglados en
+`contracts/P2PBetting.sol` (forge 34/34, regresión en `test/Audit.t.sol`):
+1. **HIGH** — resolver a opción vacía con `numOptions>2` trababa TODOS los
+   fondos (PoC: 180 USDC muertos) mientras el creador igual cobraba fee.
+   Fix: `require(poolByOption[option]>0)` en resolve (error EmptyWinningPool)
+   + `require(cfg.numOptions==2)` en la factory. En binario era inalcanzable;
+   la superficie estaba abierta porque la factory es pública on-chain.
+2. **MEDIUM** — `withdrawFees` pagaba a treasury y creador en la MISMA tx: un
+   creador en blacklist de Circle (USDC nativo) trababa también el fee de
+   plataforma. Fix: desacoplado en `withdrawPlatformFee()`/`withdrawCreatorFee()`
+   (pull independiente); `withdrawFees()` queda como atajo. Bools nuevos
+   platformFeePaid/creatorFeePaid (reemplazan feesWithdrawn).
+3. **LOW** — factory sin red: `transferOwnership` ahora Ownable2Step
+   (pendingOwner + acceptOwnership) + zero-checks (error ZeroAddress) en
+   transferOwnership/setTreasury.
+INFO aceptados sin cambio: block.timestamp (ventanas de horas), CreatorCannotBet
+evadible con 2ª wallet (modelo de confianza sin oráculo, ya asumido), dust sin
+barrer (intencional para solvencia).
+OJO: el ABI de packages/core y los contratos en Amoy (0xEcAB…eDA1) son los
+VIEJOS sin estos fixes. Entran en vigencia SOLO al redeployar (regenerar ABI
+con forge inspect al hacerlo). Esto NO reemplaza la auditoría profesional paga
+antes de mainnet.
+
 ### Backlog de contrato (NO implementado — próximas iteraciones)
 1. Prohibir que el creador apueste en su propio pozo (conflicto de interés directo).
 2. Ventana de disputa: tras `resolve()`, claims habilitados a las 24 h; si N

@@ -43,6 +43,7 @@ contract BetFactory is ERC2771Context {
     address public immutable forwarder;     // trusted forwarder (ERC-2771)
     address public immutable token;         // USDC en Polygon
     address public owner;                   // admin de la plataforma
+    address public pendingOwner;            // traspaso en dos pasos (Ownable2Step)
     address public treasury;                // recibe la comision de la plataforma
 
     // Comisiones FIJAS para el usuario (decision del dueño 2026-07-05): el
@@ -61,8 +62,13 @@ contract BetFactory is ERC2771Context {
     event FeesUpdated(uint16 platformBps, uint16 creatorBps, uint16 flashPlatformBps, uint16 flashCreatorBps);
 
     error NotOwner();
+    error ZeroAddress();       // proteccion contra dedazos que brickean la gobernanza
     error FeeTotalsMismatch(); // total normal != total flash: romperia la confianza del apostador
     error FeeTooHigh();        // techo duro de plataforma: 20% total
+
+    event OwnershipTransferStarted(address indexed from, address indexed to);
+    event OwnershipTransferred(address indexed from, address indexed to);
+    event TreasuryUpdated(address indexed treasury);
 
     modifier onlyOwner() {
         if (_msgSender() != owner) revert NotOwner();
@@ -100,6 +106,10 @@ contract BetFactory is ERC2771Context {
     /// @notice Crea una nueva apuesta. Para binario, cfg.numOptions = 2.
     ///         El split de comision lo inyecta la factory segun cfg.isFlash.
     function createBet(Bet.Config calldata cfg) external returns (address) {
+        // El producto es binario hoy: la factory NO deja crear N!=2 aunque el
+        // constructor del Bet acepte >=2. Cierra la superficie del "resolver a
+        // opcion vacia" desde la puerta de entrada. Al escalar a N, subir el tope.
+        require(cfg.numOptions == 2, "solo binario");
         (uint16 p, uint16 c) = cfg.isFlash
             ? (flashPlatformFeeBps, flashCreatorFeeBps)
             : (platformFeeBps, creatorFeeBps);
@@ -124,10 +134,27 @@ contract BetFactory is ERC2771Context {
     }
 
     // --- admin ---
-    function setTreasury(address t) external onlyOwner { treasury = t; }
+    function setTreasury(address t) external onlyOwner {
+        if (t == address(0)) revert ZeroAddress();
+        treasury = t;
+        emit TreasuryUpdated(t);
+    }
     function setFees(uint16 p, uint16 c, uint16 fp, uint16 fc) external onlyOwner { _setFees(p, c, fp, fc); }
     function setGracePeriod(uint64 secs) external onlyOwner { gracePeriod = secs; }
-    function transferOwnership(address n) external onlyOwner { owner = n; }
+
+    /// @notice Traspaso de dueño en DOS pasos: el actual propone, el nuevo acepta.
+    ///         Evita quemar la gobernanza por tipear mal una direccion.
+    function transferOwnership(address n) external onlyOwner {
+        if (n == address(0)) revert ZeroAddress();
+        pendingOwner = n;
+        emit OwnershipTransferStarted(owner, n);
+    }
+    function acceptOwnership() external {
+        if (_msgSender() != pendingOwner) revert NotOwner();
+        emit OwnershipTransferred(owner, pendingOwner);
+        owner = pendingOwner;
+        pendingOwner = address(0);
+    }
 
     // NOTA escalabilidad/gas: para abaratar el despliegue de muchas apuestas,
     // migrar de `new Bet(...)` a clones EIP-1167 (OpenZeppelin Clones) + initialize().
@@ -174,7 +201,6 @@ contract Bet is ERC2771Context, ReentrancyGuard {
     uint8   public winningOption;
     uint256 public totalBettors;
     uint256 public totalPool;
-    bool    public feesWithdrawn;
 
     mapping(uint8 => uint256) public poolByOption;                  // pozo por opcion
     mapping(address => mapping(uint8 => uint256)) public stakeOf;   // stake del usuario por opcion
@@ -204,6 +230,7 @@ contract Bet is ERC2771Context, ReentrancyGuard {
     error NothingToClaim();
     error TooEarly();
     error GraceNotOver();
+    error EmptyWinningPool(); // resolver a una opcion sin pozo trabaria los fondos
 
     constructor(
         address _forwarder,
@@ -320,6 +347,14 @@ contract Bet is ERC2771Context, ReentrancyGuard {
             return;
         }
 
+        // La opcion ganadora DEBE tener pozo. Sin esto, resolver a una opcion
+        // vacia (posible con numOptions>2) dejaria winningPool=0: nadie podria
+        // claim (stake 0) ni refund (estado Resolved, no Cancelled) y la plata
+        // quedaria atrapada para siempre mientras withdrawFees igual cobra.
+        // En binario es inalcanzable (si hay contienda, ambos lados tienen plata);
+        // esta guarda ademas habilita escalar a N sin division por cero en claim.
+        if (poolByOption[option] == 0) revert EmptyWinningPool();
+
         winningOption = option;
         status = Status.Resolved;
         emit Resolved(option);
@@ -392,23 +427,45 @@ contract Bet is ERC2771Context, ReentrancyGuard {
         emit Refunded(user, amount);
     }
 
-    /// @notice Envia las comisiones a plataforma y creador. Llamable una sola vez tras resolver.
-    function withdrawFees() external nonReentrant {
-        if (status != Status.Resolved) revert BadState();
-        require(!feesWithdrawn, "ya retiradas");
-        feesWithdrawn = true;
+    /// @notice Comision de plataforma y de creador, retirables POR SEPARADO.
+    ///         Desacopladas a proposito: el USDC nativo de Polygon tiene lista
+    ///         negra de Circle; si un destinatario queda bloqueado, su transfer
+    ///         revierte pero NO debe arrastrar al otro. Cada parte retira lo suyo.
+    bool public platformFeePaid;
+    bool public creatorFeePaid;
 
+    /// @notice Cuanto le toca a plataforma y a creador del tope de comision.
+    function _feeSplit() internal view returns (uint256 platformCut, uint256 creatorCut) {
         uint256 commission = totalCommission();
-        if (commission == 0) return;
+        if (commission == 0) return (0, 0);
+        uint256 totalBps = uint256(platformFeeBps) + creatorFeeBps;
+        platformCut = Math.mulDiv(commission, platformFeeBps, totalBps);
+        creatorCut  = commission - platformCut;
+    }
 
-        // Reparto proporcional del tope entre plataforma y creador (segun sus bps).
-        uint256 totalBps    = uint256(platformFeeBps) + creatorFeeBps;
-        uint256 platformCut = Math.mulDiv(commission, platformFeeBps, totalBps);
-        uint256 creatorCut  = commission - platformCut;
-
+    function withdrawPlatformFee() external nonReentrant {
+        if (status != Status.Resolved) revert BadState();
+        require(!platformFeePaid, "ya retirada");
+        platformFeePaid = true;
+        (uint256 platformCut, ) = _feeSplit();
         if (platformCut > 0) IERC20(token).safeTransfer(treasury, platformCut);
-        if (creatorCut  > 0) IERC20(token).safeTransfer(creator,  creatorCut);
-        emit FeesWithdrawn(platformCut, creatorCut);
+        emit FeesWithdrawn(platformCut, 0);
+    }
+
+    function withdrawCreatorFee() external nonReentrant {
+        if (status != Status.Resolved) revert BadState();
+        require(!creatorFeePaid, "ya retirada");
+        creatorFeePaid = true;
+        (, uint256 creatorCut) = _feeSplit();
+        if (creatorCut > 0) IERC20(token).safeTransfer(creator, creatorCut);
+        emit FeesWithdrawn(0, creatorCut);
+    }
+
+    /// @notice Atajo: retira ambas de una (por comodidad; usa las dos de arriba,
+    ///         asi un destinatario bloqueado no traba al otro).
+    function withdrawFees() external {
+        if (!platformFeePaid) this.withdrawPlatformFee();
+        if (!creatorFeePaid)  this.withdrawCreatorFee();
     }
 
     /*//////////////////////////////////////////////////////////
