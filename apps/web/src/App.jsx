@@ -7,8 +7,9 @@ import { useSound } from "./hooks/useSound";
 import { useMusic } from "./hooks/useMusic";
 import { useApiBettingService } from "./services/apiBettingService";
 import { useChainBetting, chainErrorMsg } from "./services/chainBetting";
+import { useIsDesktop } from "./hooks/useIsDesktop";
 import { Style } from "./components/ui/Style";
-import { DesktopWings } from "./components/DesktopWings";
+import { DesktopShell } from "./components/DesktopShell";
 import { Bg } from "./components/ui/Bg";
 import { Burst, Toast } from "./components/ui/bits";
 import { PopModal } from "./components/ui/PopModal";
@@ -61,6 +62,7 @@ export default function App() {
 
   const { soundOn, play, toggleSound } = useSound();
   const { musicOn, toggleMusic, startIfOn } = useMusic();
+  const isDesktop = useIsDesktop();
 
   const connected = authenticated && !!me;
   const points = me?.points ?? 0;
@@ -410,12 +412,91 @@ export default function App() {
     </div>
   );
 
+  const navTo = (v) => { setView(v); if (v !== "detail") setActiveId(null); };
+
+  // el contenido de la vista actual: IDÉNTICO en mobile y desktop (solo el
+  // "chrome" alrededor cambia — bottom-nav vs sidebar). El Feed va en grilla
+  // cuando es ancho.
+  const viewContent = (
+    <>
+      {view === "feed" && (
+        <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
+          invitedBy={svc.referral?.invitedBy} loading={!svc.loaded} wide={isDesktop}
+          walletOn={walletOn} onQuick={() => setShowQuick(true)} onWallet={() => setShowWallet(true)}
+          onOpen={(id) => { setActiveId(id); setView("detail"); }} />
+      )}
+      {view === "game" && (
+        <Game onBack={() => setView("feed")} tries={flightsLeft} onPrize={onPrize} play={play}
+          fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
+      )}
+      {view === "detail" && active && (
+        <Detail b={active} now={now} fire={fire} refCode={refSlug} track={svc.track}
+          onBack={() => setView("feed")}
+          onRevenge={(q) => { setQuickPrefill(q); setShowQuick(true); }}
+          onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
+      )}
+      {view === "create" && (
+        <Create onCreate={createBet} onBack={() => setView("feed")} onQuick={() => setShowQuick(true)}
+          walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs} profile={profile} now={now} />
+      )}
+      {view === "mine" && (
+        <Mine bets={bets} now={now} earned={me?.commissions ?? 0} onInvite={invite}
+          profile={profile} onSaveName={saveName} onLogout={logout}
+          walletOn={walletOn} walletAddr={chain.address ?? ""} fire={fire}
+          refStats={svc.referral}
+          onOpen={(id) => { setActiveId(id); setView("detail"); }} />
+      )}
+    </>
+  );
+
+  const overlays = (
+    <>
+      {showLink && (
+        <LinkModal onClose={() => { setShowLink(false); setLinkPrefill(null); }}
+          openByLink={svc.openByLink} useReferral={svc.useReferral}
+          initialBetId={linkPrefill} desktop={isDesktop}
+          onOpen={(id) => { setShowLink(false); setLinkPrefill(null); setActiveId(id); setView("detail"); }}
+          fire={fire} />
+      )}
+      {showWallet && (
+        <WalletSheet onClose={() => setShowWallet(false)} chain={chain} me={me}
+          onLink={svc.linkWallet} fire={fire} desktop={isDesktop} />
+      )}
+      {showQuick && (
+        <QuickModal walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs}
+          initialQuestion={quickPrefill} desktop={isDesktop}
+          onClose={() => { setShowQuick(false); setQuickPrefill(null); }}
+          onCreate={(f) => { setShowQuick(false); setQuickPrefill(null); createBet(f); }}
+          goFull={() => { setShowQuick(false); setView("create"); }} />
+      )}
+      {popup && <PopModal {...popup} onClose={() => setPopup(null)} />}
+      {burst && <Burst />}
+      {toast && <Toast t={toast} onClose={() => setToast(null)} />}
+    </>
+  );
+
+  // DESKTOP: app-shell con sidebar, contenido a lo ancho (elección del dueño).
+  if (isDesktop && connected) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.bg, position: "relative", overflow: "hidden", fontFamily: "'Space Grotesk', system-ui, sans-serif", color: C.text }}>
+        <Style />
+        <Bg />
+        <DesktopShell
+          view={view} setView={navTo} onQuick={() => setShowQuick(true)} onOpenProfile={() => navTo("mine")}
+          points={points} balance={balance} walletOn={walletOn} onWallet={() => setShowWallet(true)}
+          profile={profile} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic}
+          ticker={ticker} maxW={view === "feed" ? 1080 : 640}>
+          {viewContent}
+        </DesktopShell>
+        {overlays}
+      </div>
+    );
+  }
+
+  // MOBILE (y desktop sin sesión): la columna de 440px, intacta.
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center" }}>
       <Style />
-      {/* en desktop el margen vacío a los lados se viste de póster + QR; en
-          mobile no se renderiza nada (las alas son display:none por CSS) */}
-      <DesktopWings origin={typeof window !== "undefined" ? window.location.origin : ""} refSlug={refSlug} connected={connected} />
       <div style={{
         width: "100%", maxWidth: 440, minHeight: "100vh", position: "relative",
         overflow: "hidden", fontFamily: "'Space Grotesk', system-ui, sans-serif",
@@ -433,58 +514,12 @@ export default function App() {
             <Header balance={balance} points={points} walletOn={walletOn} onWallet={() => setShowWallet(true)} soundOn={soundOn} onSound={toggleSound} musicOn={musicOn} onMusic={toggleMusic} />
             {ticker.length > 0 && <Ticker items={ticker} />}
             <div style={{ padding: "0 16px 130px", position: "relative" }}>
-              {view === "feed" && (
-                <Feed bets={bets} now={now} tries={flightsLeft} onGame={() => setView("game")} onLink={() => setShowLink(true)}
-                  invitedBy={svc.referral?.invitedBy} loading={!svc.loaded}
-                  walletOn={walletOn} onQuick={() => setShowQuick(true)} onWallet={() => setShowWallet(true)}
-                  onOpen={(id) => { setActiveId(id); setView("detail"); }} />
-              )}
-              {view === "game" && (
-                <Game onBack={() => setView("feed")} tries={flightsLeft} onPrize={onPrize} play={play}
-                  fichaStart={svc.fichaStart} fichaEnd={svc.fichaEnd} onError={(m) => fire(m, "err")} />
-              )}
-              {view === "detail" && active && (
-                <Detail b={active} now={now} fire={fire} refCode={refSlug} track={svc.track}
-                  onBack={() => setView("feed")}
-                  onRevenge={(q) => { setQuickPrefill(q); setShowQuick(true); }}
-                  onBet={placeBet} onResolve={resolve} onClaim={claim} onRefund={refundMy} />
-              )}
-              {view === "create" && (
-                <Create onCreate={createBet} onBack={() => setView("feed")} onQuick={() => setShowQuick(true)}
-                  walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs} profile={profile} now={now} />
-              )}
-              {view === "mine" && (
-                <Mine bets={bets} now={now} earned={me?.commissions ?? 0} onInvite={invite}
-                  profile={profile} onSaveName={saveName} onLogout={logout}
-                  walletOn={walletOn} walletAddr={chain.address ?? ""} fire={fire}
-                  refStats={svc.referral}
-                  onOpen={(id) => { setActiveId(id); setView("detail"); }} />
-              )}
+              {viewContent}
             </div>
-            <BottomNav view={view} setView={(v) => { setView(v); if (v !== "detail") setActiveId(null); }} onQuick={() => setShowQuick(true)} />
-            {showLink && (
-              <LinkModal onClose={() => { setShowLink(false); setLinkPrefill(null); }}
-                openByLink={svc.openByLink} useReferral={svc.useReferral}
-                initialBetId={linkPrefill}
-                onOpen={(id) => { setShowLink(false); setLinkPrefill(null); setActiveId(id); setView("detail"); }}
-                fire={fire} />
-            )}
-            {showWallet && (
-              <WalletSheet onClose={() => setShowWallet(false)} chain={chain} me={me}
-                onLink={svc.linkWallet} fire={fire} />
-            )}
-            {showQuick && (
-              <QuickModal walletOn={walletOn} bondPts={svc.knobs.bondPts} fees={svc.knobs}
-                initialQuestion={quickPrefill}
-                onClose={() => { setShowQuick(false); setQuickPrefill(null); }}
-                onCreate={(f) => { setShowQuick(false); setQuickPrefill(null); createBet(f); }}
-                goFull={() => { setShowQuick(false); setView("create"); }} />
-            )}
+            <BottomNav view={view} setView={navTo} onQuick={() => setShowQuick(true)} />
           </>
         )}
-        {popup && <PopModal {...popup} onClose={() => setPopup(null)} />}
-        {burst && <Burst />}
-        {toast && <Toast t={toast} onClose={() => setToast(null)} />}
+        {overlays}
       </div>
     </div>
   );

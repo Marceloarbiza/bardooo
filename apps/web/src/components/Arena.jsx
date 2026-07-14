@@ -13,7 +13,7 @@ import { ghost } from "./ui/styles";
 /* =============================== FEED =============================== */
 /* Dos arenas separadas (pedido del dueño): los duelos de PUNTOS y los de
    PLATA no se mezclan en el listado — igual que sus pozos.               */
-export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, walletOn, onQuick, onWallet, loading }) {
+export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, walletOn, onQuick, onWallet, loading, wide }) {
   // la de plata primero ES la arena (pedido del dueño)… salvo que esté vacía
   // y el usuario no tenga wallet: a ese lo recibe la arena de puntos con vida.
   const [choice, setChoice] = useState(null); // null = decidir solo
@@ -91,11 +91,15 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, wall
           icon={<Zap size={11} fill={arena === "pts" ? C.bg : C.si} />} label="De puntos" />
       </div>
 
+      <div style={wide ? {
+        display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+        gap: 16, alignItems: "start",
+      } : undefined}>
       {loading && open.length === 0 ? (
         // primer load: cartas fantasma en vez de un "no hay duelos" mentiroso
         [0, 1, 2].map((i) => <SkeletonCard key={i} delay={i * 90} />)
       ) : open.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px 20px", color: C.faint }}>
+        <div style={{ textAlign: "center", padding: "40px 20px", color: C.faint, gridColumn: "1 / -1" }}>
           <Sparkles size={28} style={{ marginBottom: 10 }} />
           <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 18 }}>
             {arena === "pts"
@@ -119,6 +123,7 @@ export function Feed({ bets, now, onOpen, tries, onGame, onLink, invitedBy, wall
           )}
         </div>
       ) : open.map((b, i) => <BetCard key={b.id} b={b} now={now} onOpen={onOpen} delay={i * 70} />)}
+      </div>
     </div>
   );
 }

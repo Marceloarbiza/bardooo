@@ -7,7 +7,7 @@ import { ghost } from "./ui/styles";
    Fase 2: el server decide. Se acepta bardooo.app/bet/{id} (código validado
    SERVER-SIDE, jamás viaja al cliente) y también bardooo.app/i/{codigo} para
    registrar una invitación.                                                 */
-export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire, initialBetId = null }) {
+export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire, initialBetId = null, desktop }) {
   const [txt, setTxt] = useState("");
   const [pendId, setPendId] = useState(initialBetId); // apuesta que pide codigo (deep link entra directo acá)
   const [codeIn, setCodeIn] = useState("");
@@ -51,12 +51,15 @@ export function LinkModal({ onClose, onOpen, openByLink, useReferral, fire, init
 
   return (
     <div onClick={onClose} style={{
-      position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "flex-end", justifyContent: "center",
+      position: "fixed", inset: 0, zIndex: 40, display: "flex", justifyContent: "center",
+      alignItems: desktop ? "center" : "flex-end", padding: desktop ? 20 : 0,
       background: "rgba(6,3,12,.66)", backdropFilter: "blur(4px)",
     }}>
-      <div onClick={(e) => e.stopPropagation()} className="sheet" style={{
-        width: "100%", maxWidth: 440, background: C.bg2, borderRadius: "26px 26px 0 0",
-        border: `1px solid ${C.line}`, borderBottom: "none", padding: "18px 18px 26px", boxSizing: "border-box",
+      <div onClick={(e) => e.stopPropagation()} className={desktop ? "rise" : "sheet"} style={{
+        width: "100%", maxWidth: desktop ? 420 : 440, background: C.bg2,
+        borderRadius: desktop ? 24 : "26px 26px 0 0",
+        border: `1px solid ${C.line}`, borderBottom: desktop ? `1px solid ${C.line}` : "none",
+        padding: "18px 18px 26px", boxSizing: "border-box",
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

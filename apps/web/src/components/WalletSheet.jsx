@@ -11,7 +11,7 @@ import { ghost } from "./ui/styles";
     3) cargar 500 mUSDC de prueba (si el relayer está prendido, sin gas)
     El onramp real (tarjeta/depósito) llega con la fase de dinero real.      */
 
-export function WalletSheet({ onClose, chain, me, onLink, fire }) {
+export function WalletSheet({ onClose, chain, me, onLink, fire, desktop }) {
   const [busy, setBusy] = useState(false);
   const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "");
 
@@ -35,12 +35,15 @@ export function WalletSheet({ onClose, chain, me, onLink, fire }) {
 
   return (
     <div onClick={onClose} style={{
-      position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "flex-end", justifyContent: "center",
+      position: "fixed", inset: 0, zIndex: 40, display: "flex", justifyContent: "center",
+      alignItems: desktop ? "center" : "flex-end", padding: desktop ? 20 : 0,
       background: "rgba(6,3,12,.66)", backdropFilter: "blur(4px)",
     }}>
-      <div onClick={(e) => e.stopPropagation()} className="sheet" style={{
-        width: "100%", maxWidth: 440, background: C.bg2, borderRadius: "26px 26px 0 0",
-        border: `1px solid ${C.line}`, borderBottom: "none", padding: "20px 18px 26px", boxSizing: "border-box",
+      <div onClick={(e) => e.stopPropagation()} className={desktop ? "rise" : "sheet"} style={{
+        width: "100%", maxWidth: desktop ? 420 : 440, background: C.bg2,
+        borderRadius: desktop ? 24 : "26px 26px 0 0",
+        border: `1px solid ${C.line}`, borderBottom: desktop ? `1px solid ${C.line}` : "none",
+        padding: "20px 18px 26px", boxSizing: "border-box",
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <span style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 20 }}>Activá tu saldo USDC</span>

@@ -5,7 +5,7 @@ import { Seg, Stepper } from "./ui/bits";
 import { ghost } from "./ui/styles";
 
 /* ======================= RELÁMPAGO (bottom sheet) ======================= */
-export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, fees, initialQuestion }) {
+export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, fees, initialQuestion, desktop }) {
   // comisiones vigentes del relámpago (perillas del server, /config)
   const fPlat = (fees?.flashPlatformBps ?? 100) / 100;
   const fCre = (fees?.flashCreatorBps ?? 900) / 100;
@@ -32,12 +32,16 @@ export function QuickModal({ onClose, onCreate, goFull, walletOn, bondPts = 0, f
 
   return (
     <div onClick={onClose} style={{
-      position: "fixed", inset: 0, zIndex: 40, display: "flex", alignItems: "flex-end", justifyContent: "center",
+      position: "fixed", inset: 0, zIndex: 40, display: "flex", justifyContent: "center",
+      alignItems: desktop ? "center" : "flex-end", padding: desktop ? 20 : 0,
       background: "rgba(6,3,12,.66)", backdropFilter: "blur(4px)",
     }}>
-      <div onClick={(e) => e.stopPropagation()} className="sheet" style={{
-        width: "100%", maxWidth: 440, background: C.bg2, borderRadius: "26px 26px 0 0",
-        border: `1px solid ${C.line}`, borderBottom: "none", padding: "18px 18px 26px", boxSizing: "border-box",
+      <div onClick={(e) => e.stopPropagation()} className={desktop ? "rise" : "sheet"} style={{
+        width: "100%", maxWidth: desktop ? 440 : 440, background: C.bg2,
+        borderRadius: desktop ? 24 : "26px 26px 0 0",
+        border: `1px solid ${C.line}`, borderBottom: desktop ? `1px solid ${C.line}` : "none",
+        padding: "18px 18px 26px", boxSizing: "border-box",
+        maxHeight: desktop ? "90vh" : undefined, overflowY: desktop ? "auto" : undefined,
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
