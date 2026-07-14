@@ -147,7 +147,9 @@ export function Game({ onBack, tries, onPrize, play, fichaStart, fichaEnd, onErr
   const again = () => { startRun(); };
 
   return (
-    <div style={{ paddingTop: 12 }}>
+    // el juego se diseñó a ~380px: en desktop se limita a su ancho natural y se
+    // centra, en vez de estirar el canvas a todo el panel (se veía enorme)
+    <div style={{ paddingTop: 12, maxWidth: 460, margin: "0 auto" }}>
       <button onClick={onBack} className="press" style={ghost}><ChevronLeft size={18} /> Volver</button>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2.5, color: C.faint, margin: "10px 0 2px" }}>BONUS DIARIO</div>
       <h2 style={{ fontFamily: "Syne", fontWeight: 800, fontSize: 27, margin: "0 0 6px" }}>La Ficha</h2>

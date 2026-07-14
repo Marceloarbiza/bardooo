@@ -17,11 +17,11 @@ export function DesktopShell({
   ticker, maxW = 1100, children,
 }) {
   return (
-    <div style={{ display: "flex", minHeight: "100vh", width: "100%", position: "relative", zIndex: 1 }}>
-      {/* ── SIDEBAR ── */}
+    <div style={{ display: "flex", height: "100vh", width: "100%", position: "relative", zIndex: 1 }}>
+      {/* ── SIDEBAR (fija: no scrollea con el contenido) ── */}
       <aside style={{
-        width: 244, flexShrink: 0, position: "sticky", top: 0, alignSelf: "flex-start",
-        height: "100vh", display: "flex", flexDirection: "column",
+        width: 244, flexShrink: 0, height: "100%", display: "flex", flexDirection: "column",
+        overflowY: "auto",
         borderRight: `1px solid ${C.line}`, background: `${C.bg2}77`,
         backdropFilter: "blur(12px)", padding: "22px 16px 16px", boxSizing: "border-box",
       }}>
@@ -94,10 +94,10 @@ export function DesktopShell({
         </div>
       </aside>
 
-      {/* ── CONTENIDO ── */}
-      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      {/* ── CONTENIDO (el ÚNICO que scrollea) ── */}
+      <main style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {ticker && ticker.length > 0 && <Ticker items={ticker} />}
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
           <div style={{ maxWidth: maxW, margin: "0 auto", padding: "8px 32px 60px" }}>
             {children}
           </div>

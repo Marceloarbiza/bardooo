@@ -476,11 +476,13 @@ export default function App() {
   );
 
   // DESKTOP: app-shell con sidebar, contenido a lo ancho (elección del dueño).
+  // height fijo de viewport + overflow hidden: el scroll vive SOLO en el panel
+  // de contenido (la sidebar queda fija). El Bg va detrás, sin desbordar.
   if (isDesktop && connected) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, position: "relative", overflow: "hidden", fontFamily: "'Space Grotesk', system-ui, sans-serif", color: C.text }}>
+      <div style={{ height: "100vh", overflow: "hidden", background: C.bg, position: "relative", fontFamily: "'Space Grotesk', system-ui, sans-serif", color: C.text }}>
         <Style />
-        <Bg />
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}><Bg /></div>
         <DesktopShell
           view={view} setView={navTo} onQuick={() => setShowQuick(true)} onOpenProfile={() => navTo("mine")}
           points={points} balance={balance} walletOn={walletOn} onWallet={() => setShowWallet(true)}
