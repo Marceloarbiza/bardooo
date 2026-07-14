@@ -11,10 +11,16 @@ import { Mark } from "./ui/brand";
     el desktop), o a la home si todavía no. */
 export function DesktopWings({ origin, refSlug, connected }) {
   const qrUrl = connected && refSlug ? `${origin}/i/${refSlug}` : origin;
+  // OJO: NO poner `display` acá — el inline le gana a la media query .dwing y
+  // las alas nunca aparecerían. El display (none en mobile, flex en desktop) lo
+  // controla SOLO la clase .dwing en Style.jsx.
+  // color explícito: las alas cuelgan del root (fuera de la columna que setea el
+  // color de texto), así que sin esto el texto heredaría el negro del navegador.
   const wing = {
     position: "fixed", top: 0, bottom: 0, width: "calc((100% - 440px) / 2)",
-    display: "none", flexDirection: "column", justifyContent: "center",
+    flexDirection: "column", justifyContent: "center",
     padding: "0 clamp(20px, 3vw, 56px)", boxSizing: "border-box", zIndex: 5, pointerEvents: "none",
+    color: C.text, fontFamily: "'Space Grotesk', system-ui, sans-serif",
   };
   return (
     <>
