@@ -8,6 +8,7 @@ import { useMusic } from "./hooks/useMusic";
 import { useApiBettingService } from "./services/apiBettingService";
 import { useChainBetting, chainErrorMsg } from "./services/chainBetting";
 import { Style } from "./components/ui/Style";
+import { DesktopWings } from "./components/DesktopWings";
 import { Bg } from "./components/ui/Bg";
 import { Burst, Toast } from "./components/ui/bits";
 import { PopModal } from "./components/ui/PopModal";
@@ -412,6 +413,9 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", justifyContent: "center" }}>
       <Style />
+      {/* en desktop el margen vacío a los lados se viste de póster + QR; en
+          mobile no se renderiza nada (las alas son display:none por CSS) */}
+      <DesktopWings origin={typeof window !== "undefined" ? window.location.origin : ""} refSlug={refSlug} connected={connected} />
       <div style={{
         width: "100%", maxWidth: 440, minHeight: "100vh", position: "relative",
         overflow: "hidden", fontFamily: "'Space Grotesk', system-ui, sans-serif",

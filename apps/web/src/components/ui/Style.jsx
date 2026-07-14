@@ -29,6 +29,10 @@ export function Style() {
       .shine { background: linear-gradient(105deg, transparent 42%, rgba(255,255,255,.14) 50%, transparent 58%); background-size: 260% 100%; animation: sh 3.6s ease-in-out infinite; }
       @keyframes sh { 0% { background-position: 130% 0; } 55%, 100% { background-position: -130% 0; } }
       @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+      /* alas de escritorio: invisibles en el telefono (mobile-first intacto),
+         aparecen solo cuando sobra ancho a los lados de la columna de 440px */
+      .dwing { display: none; }
+      @media (min-width: 1120px) { .dwing { display: flex; } }
     `}</style>
   );
 }
